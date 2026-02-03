@@ -1,0 +1,19 @@
+{
+    "expo": {
+        "name": "Olympia HR",
+        "slug": "olympia-hr-mobile",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "userInterfaceStyle": "light",
+        "assetBundlePatterns": [
+            "**/*"
+        ],
+        "ios": {
+            "supportsTablet": true
+        },
+        "android": {
+            "package": "com.olympia.hr",
+            "usesCleartextTraffic": true
+        }
+    }
+}

@@ -1,0 +1,102 @@
+{
+    "company": {
+        "name": "Olympia HR",
+        "legal_name": "Olympia HR SARL",
+        "tax_id": "000000000A",
+        "cnss_id": "000000",
+        "address": "Avenue Habib Bourguiba",
+        "postal_code": "1000",
+        "city": "Tunis",
+        "country": "Tunisie",
+        "phone": "+216 71 000 000",
+        "email": "contact@olympia-hr.tn",
+        "website": "https://olympia-hr.tn"
+    },
+    "payroll_settings": {
+        "currency": "TND",
+        "working_days_per_month": 22,
+        "working_hours_per_day": 8,
+        "minimum_wage": 460.00,
+        "social_contributions": {
+            "cnss_employee_rate": 0.0918,
+            "cnss_employer_rate": 0.1657,
+            "css_rate": 0.005
+        },
+        "overtime_rates": {
+            "normal": 1.25,
+            "night_sunday": 1.50,
+            "holiday": 2.00
+        },
+        "family_allowances": {
+            "married": 300,
+            "child": 100,
+            "max_children": 4
+        }
+    },
+    "leave_settings": {
+        "annual_leave_days": 25,
+        "sick_leave_days": 15,
+        "maternity_leave_days": 90,
+        "paternity_leave_days": 3,
+        "accrual_method": "monthly",
+        "carry_forward": true,
+        "max_carry_forward_days": 10,
+        "approval_workflow": {
+            "auto_approve_threshold": 0,
+            "requires_manager_approval": true,
+            "requires_hr_approval": false
+        }
+    },
+    "attendance_settings": {
+        "require_biometric": true,
+        "require_geolocation": true,
+        "geofence_radius_meters": 500,
+        "office_location": {
+            "latitude": 36.8065,
+            "longitude": 10.1815,
+            "address": "Avenue Habib Bourguiba, Tunis"
+        },
+        "work_schedule": {
+            "monday_friday": {
+                "start": "08:00",
+                "end": "17:00",
+                "break_minutes": 60
+            },
+            "saturday": {
+                "start": "08:00",
+                "end": "13:00",
+                "break_minutes": 0
+            }
+        },
+        "late_tolerance_minutes": 15,
+        "early_leave_tolerance_minutes": 15
+    },
+    "email_settings": {
+        "from_name": "RH Olympia",
+        "from_email": "noreply@olympia-hr.tn",
+        "reply_to": "rh@olympia-hr.tn",
+        "notifications": {
+            "leave_approved": true,
+            "leave_rejected": true,
+            "payroll_generated": true,
+            "overtime_approved": true,
+            "sentiment_alert": true
+        },
+        "templates": {
+            "language": "fr",
+            "include_company_logo": true,
+            "footer_text": "Cet email a été envoyé automatiquement"
+        }
+    },
+    "ml_settings": {
+        "enable_predictions": true,
+        "sentiment_analysis_frequency": "monthly",
+        "turnover_prediction_threshold": 0.7,
+        "alerts": {
+            "high_risk_employees": true,
+            "notify_managers": true,
+            "notify_hr": true
+        },
+        "data_retention_months": 24
+    }
+}

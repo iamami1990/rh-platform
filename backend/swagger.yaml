@@ -1,0 +1,543 @@
+openapi: 3.0.3
+info:
+  title: Olympia HR Platform API
+  description: |
+    API REST pour la plateforme intelligente de gestion des ressources humaines.
+    Conforme à la réglementation tunisienne du travail et de la paie.
+    
+    ## Fonctionnalités
+    - Gestion employés avec validation Joi
+    - Présence biométrique anti-fraude
+    - Heures supplémentaires (125%, 150%, 200%)
+    - Paie conforme IRPP 2025 + CNSS
+    - Congés workflow complet
+    - Déclarations légales (CNSS, IR)
+    - Analyse sentiment IA
+    
+  version: 1.0.0
+  contact:
+    name: Support Olympia HR
+    email: support@olympia-hr.tn
+
+servers:
+  - url: http://localhost:5000/api
+    description: Serveur de développement
+  - url: https://api.olympia-hr.tn/api
+    description: Serveur de production
+
+tags:
+  - name: Authentication
+    description: Authentification JWT avec refresh tokens
+  - name: Employees
+    description: Gestion des employés
+  - name: Attendance
+    description: Gestion de la présence
+  - name: Overtime
+    description: Gestion heures supplémentaires
+  - name: Leaves
+    description: Gestion des congés
+  - name: Payroll
+    description: Gestion de la paie
+  - name: Legal
+    description: Déclarations légales
+  - name: Sentiment
+    description: Analyse sentiment IA
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenu via /auth/login
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Erreur de validation"
+        errors:
+          type: array
+          items:
+            type: string
+
+    Employee:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - department
+        - position
+        - hireDate
+        - salary_brut
+      properties:
+        employee_id:
+          type: string
+          example: "emp-123abc"
+        firstName:
+          type: string
+          minLength: 2
+          example: "Ahmed"
+        lastName:
+          type: string
+          minLength: 2
+          example: "Ben Ali"
+        email:
+          type: string
+          format: email
+          example: "ahmed.benali@company.tn"
+        cin:
+          type: string
+          pattern: '^\d{8}$'
+          example: "12345678"
+        department:
+          type: string
+          enum: [RH, IT, Finance, Commercial, Production, Marketing, Direction]
+          example: "IT"
+        position:
+          type: string
+          example: "Développeur Full-Stack"
+        contract_type:
+          type: string
+          enum: [CDI, CDD, SIVP, KARAMA, Freelance, Stage]
+          example: "CDI"
+        salary_brut:
+          type: number
+          minimum: 0
+          example: 2000
+        hireDate:
+          type: string
+          format: date
+          example: "2023-01-15"
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+          default: active
+
+    Overtime:
+      type: object
+      required:
+        - employee_id
+        - date
+        - hours
+        - rate_type
+        - reason
+      properties:
+        overtime_id:
+          type: string
+          example: "ot-456def"
+        employee_id:
+          type: string
+          example: "emp-123abc"
+        date:
+          type: string
+          format: date
+          example: "2025-12-25"
+        hours:
+          type: number
+          minimum: 0.5
+          maximum: 12
+          example: 4
+        rate_type:
+          type: string
+          enum: ["125%", "150%", "200%"]
+          example: "125%"
+        overtime_category:
+          type: string
+          enum: [regular, night, sunday, holiday]
+          example: "regular"
+        reason:
+          type: string
+          maxLength: 500
+          example: "Projet urgent à livrer"
+        amount:
+          type: number
+          example: 85.23
+        status:
+          type: string
+          enum: [pending, approved, rejected, cancelled]
+          default: pending
+
+    Payroll:
+      type: object
+      properties:
+        payroll_id:
+          type: string
+        employee_id:
+          type: string
+        month:
+          type: string
+          pattern: '^\d{4}-\d{2}$'
+          example: "2025-12"
+        gross_salary:
+          type: number
+          example: 2000
+        overtime_pay:
+          type: number
+          example: 170.45
+        total_gross:
+          type: number
+          example: 2170.45
+        deductions:
+          type: object
+          properties:
+            cnss:
+              type: number
+              description: "9.18% du brut"
+              example: 199.24
+            irpp:
+              type: number
+              description: "Selon barème 2025"
+              example: 150.50
+            css:
+              type: number
+              description: "0.5% de l'IRPP"
+              example: 0.75
+        net_salary:
+          type: number
+          example: 1819.96
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Connexion utilisateur
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+              example:
+                email: "admin@olympia-hr.tn"
+                password: "SecurePassword123!"
+      responses:
+        '200':
+          description: Connexion réussie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  refreshToken:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      user_id:
+                        type: string
+                      email:
+                        type: string
+                      role:
+                        type: string
+                        enum: [admin, manager, employee]
+        '401':
+          description: Identifiants invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /overtime:
+    get:
+      tags:
+        - Overtime
+      summary: Liste des heures supplémentaires
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+          example: "2025-12"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+        - name: employee_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Liste récupérée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 15
+                  overtimes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Overtime'
+        '401':
+          description: Non autorisé
+    
+    post:
+      tags:
+        - Overtime
+      summary: Créer demande heures supplémentaires
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Overtime'
+            example:
+              employee_id: "emp-123abc"
+              date: "2025-12-25"
+              hours: 4
+              rate_type: "125%"
+              overtime_category: "regular"
+              reason: "Projet urgent client"
+      responses:
+        '201':
+          description: Demande créée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Demande créée avec succès"
+                  overtime:
+                    $ref: '#/components/schemas/Overtime'
+        '400':
+          description: Validation échouée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /overtime/{id}/approve:
+    put:
+      tags:
+        - Overtime
+      summary: Approuver heures supplémentaires
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                manager_comments:
+                  type: string
+      responses:
+        '200':
+          description: Demande approuvée
+        '403':
+          description: Accès refusé (Manager/Admin seulement)
+
+  /legal/cnss/{month}:
+    get:
+      tags:
+        - Legal
+      summary: Bordereau CNSS mensuel
+      description: Génère fichier Excel avec cotisations CNSS (employé 9.18% + employeur 16.57%)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+          example: "2025-12"
+      responses:
+        '200':
+          description: Fichier Excel généré
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Aucune paie pour ce mois
+
+  /legal/ir-annual/{year}:
+    get:
+      tags:
+        - Legal
+      summary: Déclaration IR annuelle
+      description: Génère fichier Excel récapitulatif IRPP retenu à la source
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}$'
+          example: "2025"
+      responses:
+        '200':
+          description: Fichier Excel généré
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /legal/work-certificate/{employee_id}:
+    get:
+      tags:
+        - Legal
+      summary: Attestation de travail
+      description: Génère PDF officiel certifiant l'emploi
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: employee_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: PDF généré
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /payroll/generate:
+    post:
+      tags:
+        - Payroll
+      summary: Générer paie mensuelle
+      description: |
+        Calcule automatiquement:
+        - Heures supplémentaires approuvées
+        - Primes (ancienneté, assiduité)
+        - CNSS 9.18%
+        - IRPP selon barème 2025
+        - CSS 0.5% de l'IRPP
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - employee_id
+                - month
+              properties:
+                employee_id:
+                  type: string
+                month:
+                  type: string
+                  pattern: '^\d{4}-\d{2}$'
+      responses:
+        '201':
+          description: Paie générée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  payroll:
+                    $ref: '#/components/schemas/Payroll'
+
+  /employees:
+    get:
+      tags:
+        - Employees
+      summary: Liste des employés
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: department
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Liste récupérée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  employees:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Employee'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      totalPages:
+                        type: integer
+                      total:
+                        type: integer

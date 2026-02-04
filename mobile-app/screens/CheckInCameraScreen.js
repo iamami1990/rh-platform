@@ -1,11 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Animated, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as FaceDetector from 'expo-face-detector';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSizes, BorderRadius } from '../styles/theme';
 import { attendanceAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+
+// Try to import FaceDetector, but make it optional for Expo Go
+let FaceDetector = null;
+let faceDetectorAvailable = false;
+try {
+    FaceDetector = require('expo-face-detector');
+    faceDetectorAvailable = true;
+} catch (e) {
+    console.log('FaceDetector not available (Expo Go mode) - using simple capture mode');
+}
 
 const CheckInCameraScreen = ({ navigation, route }) => {
     const isCheckOut = route?.params?.isCheckOut || false;
@@ -15,6 +24,7 @@ const CheckInCameraScreen = ({ navigation, route }) => {
     const [faceDetected, setFaceDetected] = useState(false);
     const [faceData, setFaceData] = useState(null);
     const [countdown, setCountdown] = useState(3);
+    const [simpleMode] = useState(!faceDetectorAvailable);
     const cameraRef = useRef(null);
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const countdownRef = useRef(null);
@@ -24,6 +34,16 @@ const CheckInCameraScreen = ({ navigation, route }) => {
             requestPermission();
         }
     }, [permission]);
+
+    // In simple mode (Expo Go), auto-detect face after 2 seconds
+    useEffect(() => {
+        if (simpleMode && permission?.granted && !capturing) {
+            const timer = setTimeout(() => {
+                setFaceDetected(true);
+            }, 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [simpleMode, permission, capturing]);
 
     // Pulse animation when face is detected
     useEffect(() => {
@@ -125,7 +145,7 @@ const CheckInCameraScreen = ({ navigation, route }) => {
                 await attendanceAPI.checkIn({
                     employee_id: user.employee_id,
                     location: 'Mobile App',
-                    device_info: 'Expo Go - Facial Recognition',
+                    device_info: simpleMode ? 'Expo Go - Simple Mode' : 'Expo Go - Facial Recognition',
                     face_image_url: photoUri,
                     liveness_score: faceData ?
                         (faceData.leftEyeOpenProbability + faceData.rightEyeOpenProbability) / 2 : 1,
@@ -141,6 +161,7 @@ const CheckInCameraScreen = ({ navigation, route }) => {
                     text: 'Réessayer', onPress: () => {
                         setCapturing(false);
                         setCountdown(3);
+                        if (simpleMode) setFaceDetected(false);
                     }
                 },
                 { text: 'Annuler', onPress: () => navigation.goBack() }
@@ -169,21 +190,27 @@ const CheckInCameraScreen = ({ navigation, route }) => {
         );
     }
 
+    // Camera props - conditionally add face detection if available
+    const cameraProps = {
+        ref: cameraRef,
+        style: styles.camera,
+        facing: "front",
+    };
+
+    if (faceDetectorAvailable && FaceDetector) {
+        cameraProps.onFacesDetected = handleFacesDetected;
+        cameraProps.faceDetectorSettings = {
+            mode: FaceDetector.FaceDetectorMode.fast,
+            detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
+            runClassifications: FaceDetector.FaceDetectorClassifications.all,
+            minDetectionInterval: 100,
+            tracking: true,
+        };
+    }
+
     return (
         <View style={styles.container}>
-            <CameraView
-                ref={cameraRef}
-                style={styles.camera}
-                facing="front"
-                onFacesDetected={handleFacesDetected}
-                faceDetectorSettings={{
-                    mode: FaceDetector.FaceDetectorMode.fast,
-                    detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
-                    runClassifications: FaceDetector.FaceDetectorClassifications.all,
-                    minDetectionInterval: 100,
-                    tracking: true,
-                }}
-            />
+            <CameraView {...cameraProps} />
             <View style={styles.overlay}>
                 {/* Face Frame */}
                 <Animated.View

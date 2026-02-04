@@ -1,14 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
+const { admin, db } = require('../config/firebase');
 const { authenticate, authorize } = require('../middleware/auth');
-
-/**
- * Push Notification Routes
- * Backend endpoints for FCM push notifications
- */
-
-const db = admin.firestore();
 
 /**
  * @route   POST /api/notifications/register-device

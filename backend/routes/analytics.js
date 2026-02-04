@@ -1,14 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
+const { admin, db } = require('../config/firebase');
 const { authenticate, authorize } = require('../middleware/auth');
-
-/**
- * Behavioral Analytics Routes
- * Advanced AI-powered analytics and insights
- */
-
-const db = admin.firestore();
 
 /**
  * @route   GET /api/analytics/behavioral-patterns

@@ -187,6 +187,13 @@ router.post('/generate', authenticate, authorize('admin'), auditLogger('Generate
                 status: 'generated'
             });
 
+            // Send notification
+            const { sendPayrollNotification } = require('./notifications');
+            await sendPayrollNotification(emp.employee_id, {
+                payroll_id: payroll.payroll_id,
+                period_start: moment(month, 'YYYY-MM').startOf('month').toDate()
+            });
+
             results.push({
                 employee_id: emp.employee_id,
                 payroll_id: payroll.payroll_id,

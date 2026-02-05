@@ -9,11 +9,7 @@ yarn.lock
 .env.production
 .env.development
 
-# Firebase
-firebase-debug.log
-firestore-debug.log
-ui-debug.log
-.firebase/
+
 
 # Logs
 logs/
@@ -55,4 +51,4 @@ Thumbs.db
 .DS_Store
 
 # Secrets
-backend/serviceAccountKey.json
+

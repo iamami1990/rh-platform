@@ -60,7 +60,7 @@ Olympia HR Platform
 │
 ├── Backend API (Node.js + Express)
 │   ├── 40+ Endpoints REST
-│   ├── Firebase (Firestore + Storage + Auth)
+│   ├── MongoDB (Mongoose)
 │   ├── JWT Authentication
 │   ├── PDF Generation (PDFKit)
 │   ├── Email Notifications (Nodemailer)
@@ -83,12 +83,12 @@ Olympia HR Platform
 ```
 
 **Stack:**
-- **Backend:** Node.js 18, Express 4.18, Firebase Admin SDK
+- **Backend:** Node.js 18, Express 4.18, Mongoose
 - **Frontend:** React 18.2, Redux Toolkit, Material-UI v5
-- **Mobile:** React Native 0.73, Camera API
-- **Database:** Cloud Firestore (NoSQL)
-- **Storage:** Firebase Storage
-- **Auth:** JWT + Firebase Auth
+- **Mobile:** React Native 0.73, Expo
+- **Database:** MongoDB
+- **Storage:** Local Storage / AWS S3 (Optional)
+- **Auth:** JWT
 
 ---
 
@@ -96,7 +96,7 @@ Olympia HR Platform
 
 ### Prérequis
 - Node.js 18+
-- Compte Firebase
+- MongoDB
 - npm 9+
 
 ### Backend
@@ -105,7 +105,7 @@ Olympia HR Platform
 cd backend
 npm install
 cp ../.env.example .env
-# Configurer Firebase credentials dans .env
+# Configurer les variables d'environnement
 npm run dev
 ```
 

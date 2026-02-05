@@ -10,9 +10,8 @@ const { authenticate, authorize } = require('../middleware/auth');
  * @access  Private
  */
 router.post('/register-device', authenticate, async (req, res) => {
-    // Acknowledge the request.
-
-    // In a real non-firebase app, we might store Expo Push Token or similar.
+    // Register device for notifications (future implementation for Expo Push)
+    // Currently, we rely on in-app notifications via MongoDB polling.
     res.json({
         success: true,
         message: 'Device registration acknowledged (Push disabled)'
@@ -85,15 +84,32 @@ router.post('/send', authenticate, authorize('admin', 'manager'), async (req, re
     }
 });
 
-// Helper mockup functions for internal use
+// Helper functions for internal use
 const sendPayrollNotification = async (employee_id, payrollData) => {
     try {
         // Find user associated with employee
-        // This requires a reverse lookup or assuming employee_id is user_id? 
-        // In our auth model, user has employee_id. We need to find User by employee_id.
-        // Assuming we can't easily do that without importing User model.
-        // For PFE purpose, we'll just log it.
-        console.log(`[Mock Push] Payroll ready for ${employee_id}`);
+        const User = require('../models/User'); // Lazy load to avoid circular dependency issues if any
+        const user = await User.findOne({ employee_id });
+
+        if (!user) {
+            console.warn(`[Notification] Skipped: No user found for employee ${employee_id}`);
+            return;
+        }
+
+        const month = new Date(payrollData.period_start).toLocaleString('default', { month: 'long' });
+
+        await Notification.create({
+            user_id: user.user_id,
+            title: 'Fiche de paie disponible',
+            message: `Votre fiche de paie pour ${month} est maintenant disponible.`,
+            type: 'info',
+            data: {
+                payroll_id: payrollData.payroll_id,
+                type: 'payroll'
+            }
+        });
+
+        console.log(`[Notification] Payroll alert sent to user ${user.user_id}`);
     } catch (error) {
         console.error('Error sending payroll notification:', error);
     }
@@ -101,7 +117,34 @@ const sendPayrollNotification = async (employee_id, payrollData) => {
 
 const sendLeaveDecisionNotification = async (employee_id, leaveData, approved) => {
     try {
-        console.log(`[Mock Push] Leave ${approved ? 'Approved' : 'Rejected'} for ${employee_id}`);
+        const User = require('../models/User');
+        const user = await User.findOne({ employee_id });
+
+        if (!user) {
+            console.warn(`[Notification] Skipped: No user found for employee ${employee_id}`);
+            return;
+        }
+
+        const status = approved ? 'Approuvée' : 'Refusée';
+        const typeFR = {
+            'annual': 'Congé annuel',
+            'sick': 'Congé maladie',
+            'maternity': 'Congé maternité',
+            'unpaid': 'Congé sans solde'
+        }[leaveData.leave_type] || leaveData.leave_type;
+
+        await Notification.create({
+            user_id: user.user_id,
+            title: `Demande de congé ${status}`,
+            message: `Votre demande de ${typeFR} a été ${status.toLowerCase()}.`,
+            type: approved ? 'success' : 'warning',
+            data: {
+                leave_id: leaveData.leave_id,
+                type: 'leave_decision'
+            }
+        });
+
+        console.log(`[Notification] Leave decision sent to user ${user.user_id}`);
     } catch (error) {
         console.error('Error sending leave notification:', error);
     }

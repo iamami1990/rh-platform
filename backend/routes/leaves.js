@@ -159,9 +159,9 @@ router.put('/:id/approve', authenticate, authorize('admin', 'manager'), async (r
             return res.status(404).json({ success: false, message: 'Leave not found' });
         }
 
-        // Send notification logic here (mocked for now or use Notification model)
-        // const { sendLeaveDecisionNotification } = require('./notifications');
-        // await sendLeaveDecisionNotification(leave.employee_id, leave, true);
+        // Send notification
+        const { sendLeaveDecisionNotification } = require('./notifications');
+        await sendLeaveDecisionNotification(leave.employee_id, leave, true);
 
         res.json({
             success: true,
@@ -201,6 +201,9 @@ router.put('/:id/reject', authenticate, authorize('admin', 'manager'), async (re
             success: true,
             message: 'Leave request rejected'
         });
+
+        const { sendLeaveDecisionNotification } = require('./notifications');
+        await sendLeaveDecisionNotification(leave.employee_id, leave, false);
     } catch (error) {
         res.status(500).json({
             success: false,

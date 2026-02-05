@@ -59,7 +59,15 @@ const employeeSchema = new mongoose.Schema({
     updated_at: {
         type: Date,
         default: Date.now
-    }
+    },
+    documents: [{
+        id: String,
+        name: String,
+        type: String,
+        url: String,
+        uploaded_at: Date,
+        uploaded_by: String
+    }]
 });
 
 // Update updated_at timestamp on save

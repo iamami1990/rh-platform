@@ -22,11 +22,11 @@ const legalRoutes = require('./routes/legal');
 const { errorHandler } = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
 
-// Swagger documentation
-const swaggerUi = require('swagger-ui-express');
-const YAML = require('yamljs');
-const swaggerDocument = YAML.load('./swagger.yaml');
+// Import DB connection
+const connectDB = require('./config/db');
 
+// Connect to MongoDB
+connectDB();
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -34,9 +34,7 @@ const PORT = process.env.PORT || 5000;
 // Security middleware
 app.use(helmet());
 app.use(cors({
-    origin: process.env.NODE_ENV === 'development'
-        ? '*' // Allow all origins in development for mobile app
-        : (process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000']),
+    origin: '*',
     credentials: true
 }));
 
@@ -46,23 +44,19 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Body parsing middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.status(200).json({
         status: 'OK',
-        message: 'Olympia HR API is running',
-        timestamp: new Date().toISOString(),
-        version: '1.0.0'
+        message: 'Olympia HR API is running (MongoDB)',
+        timestamp: new Date().toISOString()
     });
 });
 
-// Swagger API Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
-// API Routes (with rate limiting)
+// API Routes
 app.use('/api', apiLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
@@ -79,11 +73,7 @@ app.use('/api/legal', legalRoutes);
 
 // 404 handler
 app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        message: 'Route not found',
-        path: req.originalUrl
-    });
+    res.status(404).json({ success: false, message: 'Route not found' });
 });
 
 // Global error handler
@@ -93,7 +83,6 @@ app.use(errorHandler);
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Olympia HR API running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
 });
 
 module.exports = app;

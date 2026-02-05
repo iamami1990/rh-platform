@@ -17,7 +17,8 @@ const errorHandler = (err, req, res, next) => {
     // Firebase errors
     if (err.code && err.code.startsWith('auth/')) {
         statusCode = 401;
-        message = mapFirebaseError(err.code);
+        // Firebase errors removed
+
     }
 
     // JWT errors
@@ -38,21 +39,7 @@ const errorHandler = (err, req, res, next) => {
     });
 };
 
-/**
- * Map Firebase error codes to user-friendly messages
- */
-const mapFirebaseError = (code) => {
-    const errorMap = {
-        'auth/user-not-found': 'User not found',
-        'auth/wrong-password': 'Incorrect password',
-        'auth/email-already-exists': 'Email already in use',
-        'auth/invalid-email': 'Invalid email format',
-        'auth/weak-password': 'Password is too weak',
-        'auth/too-many-requests': 'Too many requests. Try again later.'
-    };
 
-    return errorMap[code] || 'Authentication error';
-};
 
 module.exports = {
     errorHandler

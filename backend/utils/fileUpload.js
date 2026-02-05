@@ -1,44 +1,45 @@
-const { bucket } = require('../config/firebase');
+const fs = require('fs');
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 /**
- * Upload file to Firebase Storage
+ * Upload file to Local Storage
+
  * @param {Object} file - Multer file object
- * @param {String} folder - Destination folder in storage
- * @returns {Promise<String>} Public URL of the uploaded file
+ * @param {String} folder - Destination folder (subfolder in uploads)
+ * @returns {Promise<String>} Public URL path of the uploaded file
  */
 const uploadToStorage = async (file, folder = 'documents') => {
     return new Promise((resolve, reject) => {
         if (!file) reject('No file provided');
 
-        const fileName = `${folder}/${uuidv4()}_${file.originalname}`;
-        const fileUpload = bucket.file(fileName);
-
-        const blobStream = fileUpload.createWriteStream({
-            metadata: {
-                contentType: file.mimetype
+        try {
+            const targetFolder = path.join(uploadsDir, folder);
+            if (!fs.existsSync(targetFolder)) {
+                fs.mkdirSync(targetFolder, { recursive: true });
             }
-        });
 
-        blobStream.on('error', (error) => {
+            const fileName = `${uuidv4()}_${file.originalname.replace(/\s+/g, '_')}`;
+            const filePath = path.join(targetFolder, fileName);
+
+            fs.writeFile(filePath, file.buffer, (err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    // Return a relative URL that can be served by express.static
+                    // Assuming /uploads is served statically
+                    resolve(`/uploads/${folder}/${fileName}`);
+                }
+            });
+        } catch (error) {
             reject(error);
-        });
-
-        blobStream.on('finish', async () => {
-            // The file upload is complete.
-            try {
-                // Get a signed URL for a long duration (alternative to making it public)
-                const [url] = await fileUpload.getSignedUrl({
-                    action: 'read',
-                    expires: '03-01-2500' // Far future
-                });
-                resolve(url);
-            } catch (error) {
-                reject(error);
-            }
-        });
-
-        blobStream.end(file.buffer);
+        }
     });
 };
 

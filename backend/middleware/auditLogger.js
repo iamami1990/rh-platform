@@ -1,8 +1,8 @@
-const { getAuditLogsCollection } = require('../config/database');
+const AuditLog = require('../models/AuditLog');
 
 /**
  * Audit Logger Middleware
- * Logs user actions to the AUDIT_LOGS collection
+ * Logs user actions to the MongoDB AuditLog collection
  */
 const auditLogger = (action) => {
     return async (req, res, next) => {
@@ -27,7 +27,7 @@ const auditLogger = (action) => {
                 };
 
                 // Don't await to avoid slowing down response
-                getAuditLogsCollection().add(logData).catch(err => {
+                AuditLog.create(logData).catch(err => {
                     console.error('AUDIT LOG ERROR:', err);
                 });
             }

@@ -20,36 +20,15 @@ Plateforme complète de gestion des ressources humaines avec intelligence artifi
 - Détection automatique des retards
 - Géolocalisation
 - Historique complet
-- Statistiques en temps réel
-
-### ✅ Gestion des Congés
-- Demandes en ligne
-- Workflow d'approbation
-- Calcul automatique des soldes
-- Notifications email
-- 4 types: Annuels, Maladie, Maternité, Sans solde
 
 ### ✅ Paie Automatisée 💰
-**Calcul complet et automatique:**
-- Salaire brut + primes (ancienneté, assiduité, performance)
-- Heures supplémentaires (x1.25, x1.50)
-- Déductions (CNSS 7%, IR progressif)
+- Salaire brut + primes tunisiennes
+- Déductions (CNSS, IR progressif)
 - Génération PDF bulletins professionnels
-- Envoi automatique par email
-- Rapports masse salariale
 
 ### ✅ Analyse IA Sentiment 🤖
-**Prévention turnover:**
 - Scoring comportemental 0-100
 - Détection employés à risque
-- Recommandations automatiques
-- Alertes managers
-- Rapports PDF détaillés
-
-### ✅ Dashboards
-- Admin: KPIs globaux (employés, présence, paie, sentiment)
-- Manager: Vue équipe
-- Employé: Données personnelles
 
 ---
 
@@ -58,160 +37,93 @@ Plateforme complète de gestion des ressources humaines avec intelligence artifi
 ```
 Olympia HR Platform
 │
-├── Backend API (Node.js + Express)
+├── Backend API (Node.js + Express + MongoDB)
 │   ├── 40+ Endpoints REST
-│   ├── Firebase (Firestore + Storage + Auth)
 │   ├── JWT Authentication
 │   ├── PDF Generation (PDFKit)
-│   ├── Email Notifications (Nodemailer)
-│   └── Rate Limiting + Validation
+│   └── Mongoose Models
 │
 ├── Web Admin (React + Redux + Material-UI)
-│   ├── Login + Protected Routes
 │   ├── Dashboard avec KPIs réels
-│   ├── 6 Modules complets
-│   └── Responsive Design
+│   └── 6 Modules de gestion
 │
-├── Mobile Kiosk (React Native) [mobile-kiosk]
-│   ├── Check-in biométrique
-│   ├── Dashboard employé
-│   ├── Consultation paie
-│   └── Demandes congés
-│
-└── Docs
-    └── Documentation complète
+└── Mobile App (React Native + Expo)
+    ├── Check-in biométrique
+    └── Dashboard employé
 ```
 
 **Stack:**
-- **Backend:** Node.js 18, Express 4.18, Firebase Admin SDK
-- **Frontend:** React 18.2, Redux Toolkit, Material-UI v5
-- **Mobile:** React Native 0.73, Camera API
-- **Database:** Cloud Firestore (NoSQL)
-- **Storage:** Firebase Storage
-- **Auth:** JWT + Firebase Auth
+- **Backend:** Node.js, Express, MongoDB
+- **Frontend:** React, Material-UI, Redux Toolkit
+- **Mobile:** React Native, Expo
+- **Database:** MongoDB (Local ou Atlas)
 
 ---
 
-## 🚀 Installation Rapide
+## 🚀 Installation & Démarrage (Équipe)
 
-### Prérequis
+### 1. Prérequis
 - Node.js 18+
-- Compte Firebase
-- npm 9+
+- MongoDB installé localement (ou URI Atlas)
 
-### Backend
-
+### 2. Backend
 ```bash
 cd backend
 npm install
-cp ../.env.example .env
-# Configurer Firebase credentials dans .env
+cp .env.example .env
+# Mettre à jour MONGO_URI dans .env
 npm run dev
 ```
+**API:** http://localhost:5000
 
-**API disponible sur:** http://localhost:5000
+### 3. Création du compte Admin (Premier démarrage)
+```bash
+cd backend
+node setup_admin.js
+```
 
-### Web Admin
-
+### 4. Web Admin
 ```bash
 cd web-admin
 npm install
-npm start
+npm run dev
 ```
+**Interface:** http://localhost:3000
 
-**Interface disponible sur:** http://localhost:3000
-
-### Mobile Kiosk
-
+### 5. Mobile App
 ```bash
-cd mobile-kiosk
+cd mobile-app
 npm install
-npx react-native run-android  # ou run-ios
+npx expo start
 ```
 
-**📖 Guide complet:** [docs/CONFIGURATION_GUIDE.md](./docs/CONFIGURATION_GUIDE.md)
+---
+
+## 🔐 Identifiants de Connexion (Test/Dev)
+
+Utilisez ces identifiants pour vous connecter à tous les services après avoir lancé le script `setup_admin.js` :
+
+| Rôle | Email | Mot de Passe |
+|------|-------|--------------|
+| **Administrateur** | `admin@test.com` | `password123` |
 
 ---
 
-## 📊 État du Projet
+## 📚 Documentation Technique
 
-| Phase | Statut | Progression |
-|-------|--------|-------------|
-| **Phase 1:** Foundation | ✅ Terminé | 100% |
-| **Phase 2:** Backend Core | ✅ Terminé | 100% |
-| **Phase 3:** Web Frontend | ✅ Terminé | 100% |
-| **Phase 4:** Mobile App | 🟡 Beta | 70% |
-| **Phase 5:** AI Advanced | ⏸️ Planifié | 0% |
-| **Phase 6:** Testing | ⏸️ Planifié | 0% |
-
-**Métriques:**
-- 60+ Fichiers créés
-- ~7,000 lignes de code
-- 40+ API endpoints
-- 12+ React components
-- 7 Collections Firestore
-- 4 PDF generators
-- 6 Email templates
+- **Backend API:** [backend/README.md](./backend/README.md)
+- **Mobile Guide:** [mobile-app/DEVELOPMENT_GUIDE.md](./mobile-app/DEVELOPMENT_GUIDE.md)
 
 ---
 
-## 📚 Documentation
+## 🤝 Collaboration (Workflow Git)
 
-- Graphiques interactifs
-- Rapports exportables
-
----
-
-## 🔐 Sécurité
-
-- ✅ HTTPS obligatoire
-- ✅ Chiffrement bcrypt des mots de passe
-- ✅ Protection CORS
-- ✅ Validation des entrées (anti-injection)
-- ✅ Audit logs complets
-- ✅ Gestion sécurisée des données biométriques
-
----
-
-## 📅 Roadmap
-
-- [x] Phase 1: Foundation & Setup (Semaines 1-2)
-- [ ] Phase 2: Backend Core Services (Semaines 3-5)
-- [ ] Phase 3: Web Admin Interface (Semaines 6-8)
-- [ ] Phase 4: Mobile Employee App (Semaines 9-11)
-- [ ] Phase 5: Advanced AI Features (Semaines 12-15)
-- [ ] Phase 6: Testing & Documentation (Semaines 16-18)
-
----
-
-## 👥 Équipe
-
-- Tech Lead & Architect
-- 2x Frontend Developers
-- 2x Backend Developers
-- 1x ML Engineer
-- 1x QA Engineer
-- 1x UI/UX Designer
-
----
-
-## 🤝 Contribution
-
-Voir [CONTRIBUTING.md](./CONTRIBUTING.md) pour les règles de collaboration et le workflow Git.
-
-Pour l'administration du dépôt (Protection des branches), voir [ADMIN_SETUP.md](./docs/ADMIN_SETUP.md).
+1. Toujours travailler sur une branche séparée : `git checkout -b nom-ma-feature`
+2. Faire un Push vers GitHub.
+3. Créer une Pull Request (PR) pour fusionner vers `main`.
 
 ---
 
 ## 📄 License
+Proprietary - Olympia HR Platform © 2026
 
-Proprietary - Olympia HR Platform © 2025
-
----
-
-## 📞 Support
-
-Pour toute question ou assistance, contactez l'équipe de développement.
-
-**Version:** 1.0.0  
-**Date:** Décembre 2025

@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { v4: uuidv4 } = require('uuid');
 const moment = require('moment');
 const PDFDocument = require('pdfkit');
-const { getPayrollCollection, getEmployeesCollection, getAttendanceCollection } = require('../config/database');
+const Payroll = require('../models/Payroll');
+const Employee = require('../models/Employee');
+const Attendance = require('../models/Attendance');
+const Overtime = require('../models/Overtime');
 const { authenticate, authorize } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
 const { generatePayrollPDF } = require('../utils/pdfGenerator');
@@ -13,26 +15,19 @@ const ExcelJS = require('exceljs');
 
 /**
  * Calculate payroll for an employee for a specific month
- */
-/**
- * Calculate payroll for an employee for a specific month
  * Implements Tunisian Tax Law (Loi de Finances 2025)
  */
 const calculatePayroll = async (employee_id, month) => {
-    const empDoc = await getEmployeesCollection().doc(employee_id).get();
-    if (!empDoc.exists) throw new Error('Employee not found');
-    const employee = empDoc.data();
+    const employee = await Employee.findById(employee_id);
+    if (!employee) throw new Error('Employee not found');
 
     const startDate = moment(month, 'YYYY-MM').startOf('month').format('YYYY-MM-DD');
     const endDate = moment(month, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
 
-    const attendanceSnapshot = await getAttendanceCollection()
-        .where('employee_id', '==', employee_id)
-        .get();
-
-    const attendanceRecords = attendanceSnapshot.docs
-        .map(doc => doc.data())
-        .filter(r => r.date >= startDate && r.date <= endDate);
+    const attendanceRecords = await Attendance.find({
+        employee_id,
+        date: { $gte: startDate, $lte: endDate }
+    });
 
     const workingDays = 22; // Standard working days/month in Tunisia
     const presentDays = attendanceRecords.filter(r => r.status === 'present' || r.status === 'late').length;
@@ -44,19 +39,17 @@ const calculatePayroll = async (employee_id, month) => {
     // ==============================================
     // OVERTIME CALCULATION (Approved only)
     // ==============================================
-    const { getOvertimeCollection } = require('../config/database');
-    const overtimeSnapshot = await getOvertimeCollection()
-        .where('employee_id', '==', employee_id)
-        .where('month', '==', month)
-        .where('status', '==', 'approved')
-        .get();
+    const overtimeRecords = await Overtime.find({
+        employee_id,
+        month,
+        status: 'approved'
+    });
 
     let overtime_pay = 0;
     let overtime_hours = 0;
     const overtimeDetails = [];
 
-    overtimeSnapshot.docs.forEach(doc => {
-        const ot = doc.data();
+    overtimeRecords.forEach(ot => {
         const baseHourlyRate = base_salary / (22 * 8); // 22 jours * 8h
         let rateMultiplier = 1.25; // Default 125%
         if (ot.rate_type === '150%') rateMultiplier = 1.5;
@@ -111,8 +104,6 @@ const calculatePayroll = async (employee_id, month) => {
     }
     const children_count = parseInt(employee.children_count || 0);
     annual_family_deducted += Math.min(children_count, 4) * 100;
-
-    const monthly_family_deductions = annual_family_deducted / 12;
 
     // 5. IRPP Calculation (2025 Scale)
     const annual_taxable_base = (taxable_income - monthly_prof_expenses) * 12 - annual_family_deducted;
@@ -227,23 +218,17 @@ router.post('/generate', authenticate, authorize('admin'), auditLogger('Generate
         }
 
         // Get all active employees
-        const empSnapshot = await getEmployeesCollection()
-            .where('status', '==', 'active')
-            .get();
+        const employees = await Employee.find({ status: 'active' });
 
         const results = [];
 
-        for (const empDoc of empSnapshot.docs) {
-            const employee_id = empDoc.id;
+        for (const employee of employees) {
+            const employee_id = employee._id;
 
             // Check if payroll already exists
-            const existingSnapshot = await getPayrollCollection()
-                .where('employee_id', '==', employee_id)
-                .where('month', '==', month)
-                .limit(1)
-                .get();
+            const existingPayroll = await Payroll.findOne({ employee_id, month });
 
-            if (!existingSnapshot.empty) {
+            if (existingPayroll) {
                 results.push({
                     employee_id,
                     status: 'already_exists'
@@ -254,8 +239,7 @@ router.post('/generate', authenticate, authorize('admin'), auditLogger('Generate
             // Calculate payroll
             const payrollData = await calculatePayroll(employee_id, month);
 
-            const employee = empDoc.data();
-            const payroll = {
+            const newPayroll = new Payroll({
                 employee_id,
                 employee_name: `${employee.firstName} ${employee.lastName}`,
                 month,
@@ -264,16 +248,15 @@ router.post('/generate', authenticate, authorize('admin'), auditLogger('Generate
                 status: 'generated',
                 generated_at: new Date(),
                 paid_at: null
-            };
+            });
 
-            const payrollId = uuidv4();
-            await getPayrollCollection().doc(payrollId).set(payroll);
+            await newPayroll.save();
 
             results.push({
                 employee_id,
-                payroll_id: payrollId,
+                payroll_id: newPayroll._id,
                 status: 'generated',
-                net_salary: payroll.net_salary
+                net_salary: newPayroll.net_salary
             });
         }
 
@@ -284,6 +267,7 @@ router.post('/generate', authenticate, authorize('admin'), auditLogger('Generate
             results
         });
     } catch (error) {
+        console.error('GENERATE PAYROLL ERROR:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to generate payroll',
@@ -302,23 +286,18 @@ router.get('/my', authenticate, async (req, res) => {
         // Authenticated user ID is in req.user.uid
         // We need to find the employee_id linked to this user or use it directly
         // Assuming req.user contains the employee_id if it's an employee
-        const employeeId = req.user.employee_id || req.user.uid;
+        const employeeId = req.user.employee_id || req.user.user_id; // Using user_id as fallback but usually it's employee_id
 
-        const snapshot = await getPayrollCollection()
-            .where('employee_id', '==', employeeId)
-            .get();
-
-        const payrolls = snapshot.docs.map(doc => ({
-            payroll_id: doc.id,
-            ...doc.data()
-        }));
-
-        payrolls.sort((a, b) => b.month.localeCompare(a.month));
+        const payrolls = await Payroll.find({ employee_id: employeeId })
+            .sort({ month: -1 });
 
         res.json({
             success: true,
             count: payrolls.length,
-            payrolls
+            payrolls: payrolls.map(p => ({
+                payroll_id: p._id,
+                ...p.toObject()
+            }))
         });
     } catch (error) {
         res.status(500).json({
@@ -338,33 +317,20 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
     try {
         const { month, employee_id } = req.query;
 
-        let query = getPayrollCollection();
+        const query = {};
 
-        if (month) {
-            query = query.where('month', '==', month);
-        }
+        if (month) query.month = month;
+        if (employee_id) query.employee_id = employee_id;
 
-        if (employee_id) {
-            query = query.where('employee_id', '==', employee_id);
-        }
-
-        const snapshot = await query.get();
-        let payrolls = snapshot.docs.map(doc => ({
-            payroll_id: doc.id,
-            ...doc.data()
-        }));
-
-        // Sort in-memory to avoid missing index errors in Firestore
-        payrolls.sort((a, b) => {
-            const dateA = a.generated_at?.toDate?.() || new Date(a.generated_at);
-            const dateB = b.generated_at?.toDate?.() || new Date(b.generated_at);
-            return dateB - dateA; // Descending
-        });
+        const payrolls = await Payroll.find(query).sort({ generated_at: -1 });
 
         res.json({
             success: true,
             count: payrolls.length,
-            payrolls
+            payrolls: payrolls.map(p => ({
+                payroll_id: p._id,
+                ...p.toObject()
+            }))
         });
     } catch (error) {
         console.error('FETCH PAYROLL ERROR:', error);
@@ -392,11 +358,7 @@ router.get('/report', authenticate, authorize('admin'), async (req, res) => {
             });
         }
 
-        const snapshot = await getPayrollCollection()
-            .where('month', '==', month)
-            .get();
-
-        const payrolls = snapshot.docs.map(doc => doc.data());
+        const payrolls = await Payroll.find({ month });
 
         const report = {
             month,
@@ -405,7 +367,7 @@ router.get('/report', authenticate, authorize('admin'), async (req, res) => {
             total_deductions: payrolls.reduce((sum, p) => sum + Number(p.total_deductions || 0), 0),
             total_net: payrolls.reduce((sum, p) => sum + Number(p.net_salary || 0), 0),
             total_cnss: payrolls.reduce((sum, p) => sum + Number(p.deductions?.cnss || 0), 0),
-            total_tax: payrolls.reduce((sum, p) => sum + Number(p.deductions?.income_tax || 0), 0)
+            total_tax: payrolls.reduce((sum, p) => sum + Number(p.deductions?.irpp || 0), 0)
         };
 
         res.json({
@@ -429,9 +391,9 @@ router.get('/report', authenticate, authorize('admin'), async (req, res) => {
  */
 router.get('/:id', authenticate, async (req, res) => {
     try {
-        const doc = await getPayrollCollection().doc(req.params.id).get();
+        const payroll = await Payroll.findById(req.params.id);
 
-        if (!doc.exists) {
+        if (!payroll) {
             return res.status(404).json({
                 success: false,
                 message: 'Payroll not found'
@@ -441,8 +403,8 @@ router.get('/:id', authenticate, async (req, res) => {
         res.json({
             success: true,
             payroll: {
-                payroll_id: doc.id,
-                ...doc.data()
+                payroll_id: payroll._id,
+                ...payroll.toObject()
             }
         });
     } catch (error) {
@@ -462,17 +424,17 @@ router.get('/:id', authenticate, async (req, res) => {
  */
 router.get('/:id/pdf', authenticate, async (req, res) => {
     try {
-        const payrollDoc = await getPayrollCollection().doc(req.params.id).get();
-        if (!payrollDoc.exists) {
+        const payrollDoc = await Payroll.findById(req.params.id);
+        if (!payrollDoc) {
             return res.status(404).json({ success: false, message: 'Payroll not found' });
         }
-        const payrollData = payrollDoc.data();
+        const payrollData = payrollDoc.toObject();
 
-        const employeeDoc = await getEmployeesCollection().doc(payrollData.employee_id).get();
-        if (!employeeDoc.exists) {
+        const employeeDoc = await Employee.findById(payrollData.employee_id);
+        if (!employeeDoc) {
             return res.status(404).json({ success: false, message: 'Employee not found' });
         }
-        const employeeData = employeeDoc.data();
+        const employeeData = employeeDoc.toObject();
 
         // Get employee name for filename
         const filename = `Payslip_${employeeData.lastName}_${payrollData.month}.pdf`;
@@ -508,11 +470,7 @@ router.get('/export/sepa/:month', authenticate, authorize('admin'), async (req, 
         const { month } = req.params;
 
         // Get all payrolls for the month
-        const snapshot = await getPayrollCollection()
-            .where('month', '==', month)
-            .get();
-
-        const payrolls = snapshot.docs.map(doc => doc.data());
+        const payrolls = await Payroll.find({ month }).lean();
 
         if (payrolls.length === 0) {
             return res.status(404).json({ success: false, message: 'No payroll found for this month' });
@@ -544,17 +502,17 @@ router.get('/export/sepa/:month', authenticate, authorize('admin'), async (req, 
  */
 router.post('/:id/send-email', authenticate, authorize('admin'), async (req, res) => {
     try {
-        const payrollDoc = await getPayrollCollection().doc(req.params.id).get();
-        if (!payrollDoc.exists) {
+        const payrollDoc = await Payroll.findById(req.params.id);
+        if (!payrollDoc) {
             return res.status(404).json({ success: false, message: 'Payroll not found' });
         }
-        const payrollData = payrollDoc.data();
+        const payrollData = payrollDoc.toObject();
 
-        const employeeDoc = await getEmployeesCollection().doc(payrollData.employee_id).get();
-        if (!employeeDoc.exists) {
+        const employeeDoc = await Employee.findById(payrollData.employee_id);
+        if (!employeeDoc) {
             return res.status(404).json({ success: false, message: 'Employee not found' });
         }
-        const employeeData = employeeDoc.data();
+        const employeeData = employeeDoc.toObject();
 
         // Generate PDF
         const pdfDoc = await generatePayrollPDF(payrollData, employeeData);
@@ -602,8 +560,7 @@ router.post('/:id/send-email', authenticate, authorize('admin'), async (req, res
 router.get('/export/excel/:month', authenticate, authorize('admin'), async (req, res) => {
     try {
         const { month } = req.params;
-        const snapshot = await getPayrollCollection().where('month', '==', month).get();
-        const payrolls = snapshot.docs.map(doc => doc.data());
+        const payrolls = await Payroll.find({ month }).lean();
 
         if (payrolls.length === 0) {
             return res.status(404).json({ success: false, message: 'No data found' });
@@ -649,8 +606,7 @@ router.get('/export/excel/:month', authenticate, authorize('admin'), async (req,
 router.get('/statutory/cnss/:month', authenticate, authorize('admin'), async (req, res) => {
     try {
         const { month } = req.params;
-        const snapshot = await getPayrollCollection().where('month', '==', month).get();
-        const payrolls = snapshot.docs.map(doc => doc.data());
+        const payrolls = await Payroll.find({ month }).lean();
 
         const cnssSummary = {
             period: month,

@@ -1,45 +1,74 @@
-const { bucket } = require('../config/firebase');
+const { uploadSingle } = require('../middleware/upload');
+
+// Since we moved to local storage in middleware/upload.js, 
+// this utility might be redundant if it was just wrapping Firebase.
+// However, the routes might be calling a function 'uploadToStorage'.
+// We need to maintain backward compatibility or refactor the routes.
+
+// Looking at leaves.js: 
+// const { uploadToStorage } = require('../utils/fileUpload');
+// document_url = await uploadToStorage(req.file, `leaves/${employee_id}`);
+
+// So we need to provide 'uploadToStorage' that behaves similarly but for local files.
+// BUT, the middleware/upload.js in previous step configured Multer to save disk directly.
+// So req.file.path or req.file.filename is already available in the route helper.
+// We should check how leaves.js uses it.
+
+// Update: In leaves.js, `upload.single('justification')` is used from `multer`.
+// Wait, leaves.js imports `multer` locally AND `uploadToStorage`. 
+// That's a conflict or double handling.
+
+// Let's redirect `uploadToStorage` to return the file path if it's already uploaded,
+// or handle the stream if it was memory storage.
+
+// The `middleware/upload.js` I wrote uses diskStorage. 
+// If leaves.js still uses `multer.memoryStorage()`, then `req.file.buffer` exists.
+// Code in leaves.js: `const upload = multer({ storage: multer.memoryStorage() ... })`
+// So leaves.js is NOT using my new middleware yet.
+
+// I should rewrite `utils/fileUpload.js` to handle the buffer save to disk.
+
+const fs = require('fs');
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
+const uploadDir = path.join(__dirname, '../public/uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 /**
- * Upload file to Firebase Storage
- * @param {Object} file - Multer file object
- * @param {String} folder - Destination folder in storage
- * @returns {Promise<String>} Public URL of the uploaded file
+ * Save buffer to local disk (Replacement for Firebase Storage upload)
+ * @param {Object} file - Multer file object (with buffer)
+ * @param {String} folder - Subfolder (ignored in flat public/uploads structure for simplicity, or we can make subdirs)
+ * @returns {Promise<String>} - Public URL
  */
-const uploadToStorage = async (file, folder = 'documents') => {
+const uploadToStorage = async (file, folder = 'uploads') => {
     return new Promise((resolve, reject) => {
-        if (!file) reject('No file provided');
+        try {
+            // Ensure subdirectory exists if needed, or just flatten. 
+            // Let's flatten for simplicity as per middleware/upload.js
 
-        const fileName = `${folder}/${uuidv4()}_${file.originalname}`;
-        const fileUpload = bucket.file(fileName);
+            const filename = `${uuidv4()}${path.extname(file.originalname)}`;
+            const filepath = path.join(uploadDir, filename);
 
-        const blobStream = fileUpload.createWriteStream({
-            metadata: {
-                contentType: file.mimetype
-            }
-        });
+            fs.writeFile(filepath, file.buffer, (err) => {
+                if (err) reject(err);
 
-        blobStream.on('error', (error) => {
+                // Assuming server runs on process.env.BASE_URL or localhost:5000
+                // We'll return a relative path or absolute URL if allowed.
+                // Better to return relative path '/uploads/filename' and let frontend handle base URL,
+                // or hardcode a heuristic.
+
+                const publicUrl = `/uploads/${filename}`;
+                resolve(publicUrl);
+            });
+        } catch (error) {
             reject(error);
-        });
-
-        blobStream.on('finish', async () => {
-            // The file upload is complete.
-            try {
-                // Get a signed URL for a long duration (alternative to making it public)
-                const [url] = await fileUpload.getSignedUrl({
-                    action: 'read',
-                    expires: '03-01-2500' // Far future
-                });
-                resolve(url);
-            } catch (error) {
-                reject(error);
-            }
-        });
-
-        blobStream.end(file.buffer);
+        }
     });
 };
 
-module.exports = { uploadToStorage };
+module.exports = {
+    uploadToStorage
+};

@@ -3,7 +3,8 @@ const router = express.Router();
 const moment = require('moment');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
-const { getPayrollCollection, getEmployeesCollection } = require('../config/database');
+const Payroll = require('../models/Payroll');
+const Employee = require('../models/Employee');
 const { authenticate, authorize } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
 
@@ -17,11 +18,7 @@ router.get('/cnss/:month', authenticate, authorize('admin'), auditLogger('Genera
         const { month } = req.params;
 
         // Get all payrolls for the month
-        const snapshot = await getPayrollCollection()
-            .where('month', '==', month)
-            .get();
-
-        const payrolls = snapshot.docs.map(doc => doc.data());
+        const payrolls = await Payroll.find({ month });
 
         if (payrolls.length === 0) {
             return res.status(404).json({ success: false, message: 'Aucune paie pour ce mois' });
@@ -58,15 +55,15 @@ router.get('/cnss/:month', authenticate, authorize('admin'), auditLogger('Genera
 
         // Add data
         for (const payroll of payrolls) {
-            const empDoc = await getEmployeesCollection().doc(payroll.employee_id).get();
-            const employee = empDoc.exists ? empDoc.data() : {};
+            const employee = await Employee.findById(payroll.employee_id);
+            const employeeData = employee ? employee.toObject() : {};
 
             const employerCNSS = Number(payroll.total_gross || 0) * 0.1657;
 
             worksheet.addRow({
-                matricule: employee.matricule || 'N/A',
+                matricule: employeeData.matricule || 'N/A',
                 name: payroll.employee_name,
-                cin: employee.cin || 'N/A',
+                cin: employeeData.cin || 'N/A',
                 gross: Number(payroll.total_gross || 0).toFixed(3),
                 cnss_employee: Number(payroll.deductions?.cnss || 0).toFixed(3),
                 cnss_employer: employerCNSS.toFixed(3),
@@ -112,31 +109,28 @@ router.get('/ir-annual/:year', authenticate, authorize('admin'), auditLogger('Ge
     try {
         const { year } = req.params;
 
-        // Get all payrolls for the year
-        const snapshot = await getPayrollCollection().get();
-        const allPayrolls = snapshot.docs.map(doc => doc.data());
+        // Get all payrolls for the year (filter in query)
+        const payrolls = await Payroll.find({ month: { $regex: `^${year}` } });
 
-        // Filter by year
-        const yearPayrolls = allPayrolls.filter(p => p.month && p.month.startsWith(year));
-
-        if (yearPayrolls.length === 0) {
+        if (payrolls.length === 0) {
             return res.status(404).json({ success: false, message: 'Aucune donnée pour cette année' });
         }
 
         // Group by employee
         const employeeIRMap = {};
-        yearPayrolls.forEach(p => {
-            if (!employeeIRMap[p.employee_id]) {
-                employeeIRMap[p.employee_id] = {
+        payrolls.forEach(p => {
+            const empId = p.employee_id.toString();
+            if (!employeeIRMap[empId]) {
+                employeeIRMap[empId] = {
                     employee_name: p.employee_name,
                     total_gross: 0,
                     total_irpp: 0,
                     months_count: 0
                 };
             }
-            employeeIRMap[p.employee_id].total_gross += Number(p.total_gross || 0);
-            employeeIRMap[p.employee_id].total_irpp += Number(p.deductions?.irpp || 0);
-            employeeIRMap[p.employee_id].months_count++;
+            employeeIRMap[empId].total_gross += Number(p.total_gross || 0);
+            employeeIRMap[empId].total_irpp += Number(p.deductions?.irpp || 0);
+            employeeIRMap[empId].months_count++;
         });
 
         // Generate Excel
@@ -203,12 +197,10 @@ router.get('/work-certificate/:employee_id', authenticate, authorize('admin', 'm
     try {
         const { employee_id } = req.params;
 
-        const empDoc = await getEmployeesCollection().doc(employee_id).get();
-        if (!empDoc.exists) {
+        const employee = await Employee.findById(employee_id);
+        if (!employee) {
             return res.status(404).json({ success: false, message: 'Employé non trouvé' });
         }
-
-        const employee = empDoc.data();
 
         // Generate PDF
         const doc = new PDFDocument({ size: 'A4', margin: 50 });
@@ -295,12 +287,10 @@ router.get('/salary-certificate/:employee_id', authenticate, authorize('admin'),
     try {
         const { employee_id } = req.params;
 
-        const empDoc = await getEmployeesCollection().doc(employee_id).get();
-        if (!empDoc.exists) {
+        const employee = await Employee.findById(employee_id);
+        if (!employee) {
             return res.status(404).json({ success: false, message: 'Employé non trouvé' });
         }
-
-        const employee = empDoc.data();
 
         // Get last 3 months payroll
         const currentMonth = moment().format('YYYY-MM');
@@ -310,14 +300,10 @@ router.get('/salary-certificate/:employee_id', authenticate, authorize('admin'),
             moment().subtract(2, 'month').format('YYYY-MM')
         ];
 
-        const payrollsSnapshot = await getPayrollCollection()
-            .where('employee_id', '==', employee_id)
-            .get();
-
-        const payrolls = payrollsSnapshot.docs
-            .map(doc => doc.data())
-            .filter(p => last3Months.includes(p.month))
-            .sort((a, b) => b.month.localeCompare(a.month));
+        const payrolls = await Payroll.find({
+            employee_id,
+            month: { $in: last3Months }
+        }).sort({ month: -1 });
 
         const averageNet = payrolls.length > 0
             ? payrolls.reduce((sum, p) => sum + Number(p.net_salary || 0), 0) / payrolls.length

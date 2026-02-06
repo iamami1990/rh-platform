@@ -111,7 +111,7 @@ const PayrollPage = () => {
             // Since CNSS might be a JSON report or a file download depending on backend
             // In our backend implementation it returns JSON, but for a "report" we usually want a display or export.
             // Let's assume we display it or download as JSON for now, or just alert success.
-            console.log('CNSS Data:', response.data);
+
             alert(`Rapport CNSS pour ${selectedMonth} généré avec succès. (Voir console pour les détails)`);
         } catch (error) {
             console.error('Failed to get CNSS report:', error);

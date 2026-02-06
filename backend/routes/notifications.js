@@ -1,14 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
+const DeviceToken = require('../models/DeviceToken');
 const { authenticate, authorize } = require('../middleware/auth');
 
 /**
  * Push Notification Routes
- * Backend endpoints for FCM push notifications
+ * 
+ * NOTE: Firebase Cloud Messaging (FCM) has been removed.
+ * This service now persists notifications to MongoDB and mocks the "Push" delivery.
+ * For real push notifications, integrate OneSignal, Expo, or a specialized service.
  */
-
-const db = admin.firestore();
 
 /**
  * @route   POST /api/notifications/register-device
@@ -26,17 +27,20 @@ router.post('/register-device', authenticate, async (req, res) => {
             });
         }
 
-        // Store device token in Firestore
         const deviceData = {
             user_id: user_id || req.user.user_id,
             fcm_token,
             platform,
             device_info,
-            registered_at: admin.firestore.FieldValue.serverTimestamp(),
-            last_active: admin.firestore.FieldValue.serverTimestamp()
+            last_active: new Date()
         };
 
-        await db.collection('device_tokens').doc(fcm_token).set(deviceData);
+        // Upsert device token
+        await DeviceToken.findOneAndUpdate(
+            { fcm_token },
+            deviceData,
+            { upsert: true, new: true }
+        );
 
         res.json({
             success: true,
@@ -60,7 +64,7 @@ router.post('/unregister-device', authenticate, async (req, res) => {
     try {
         const { fcm_token } = req.body;
 
-        await db.collection('device_tokens').doc(fcm_token).delete();
+        await DeviceToken.findOneAndDelete({ fcm_token });
 
         res.json({
             success: true,
@@ -85,37 +89,27 @@ router.post('/send', authenticate, authorize('admin', 'manager'), async (req, re
         const { user_id, title, body, data } = req.body;
 
         // Get user's device tokens
-        const tokensSnapshot = await db.collection('device_tokens')
-            .where('user_id', '==', user_id)
-            .get();
+        const devices = await DeviceToken.find({ user_id });
 
-        if (tokensSnapshot.empty) {
+        if (devices.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'No devices found for user'
             });
         }
 
-        const tokens = tokensSnapshot.docs.map(doc => doc.data().fcm_token);
+        const tokens = devices.map(d => d.fcm_token);
 
-        // Send notification via FCM
-        const message = {
-            notification: {
-                title,
-                body
-            },
-            data: data || {},
-            tokens
-        };
-
-        const response = await admin.messaging().sendMulticast(message);
+        // MOCK SEND
+        console.log(`[PUSH MOCK] Sending to ${tokens.length} devices for user ${user_id}`);
+        console.log(`[PUSH MOCK] Title: ${title}, Body: ${body}`);
 
         res.json({
             success: true,
-            message: `Notification sent to ${response.successCount} device(s)`,
+            message: `Notification sent to ${tokens.length} device(s) (MOCKED)`,
             results: {
-                success: response.successCount,
-                failure: response.failureCount
+                success: tokens.length,
+                failure: 0
             }
         });
     } catch (error) {
@@ -136,20 +130,13 @@ router.post('/send-to-topic', authenticate, authorize('admin'), async (req, res)
     try {
         const { topic, title, body, data } = req.body;
 
-        const message = {
-            notification: {
-                title,
-                body
-            },
-            data: data || {},
-            topic
-        };
-
-        await admin.messaging().send(message);
+        // MOCK SEND
+        console.log(`[PUSH MOCK] Sending to topic: ${topic}`);
+        console.log(`[PUSH MOCK] Title: ${title}, Body: ${body}`);
 
         res.json({
             success: true,
-            message: `Notification sent to topic: ${topic}`
+            message: `Notification sent to topic: ${topic} (MOCKED)`
         });
     } catch (error) {
         res.status(500).json({
@@ -165,31 +152,12 @@ router.post('/send-to-topic', authenticate, authorize('admin'), async (req, res)
  */
 const sendPayrollNotification = async (employee_id, payrollData) => {
     try {
-        const tokensSnapshot = await db.collection('device_tokens')
-            .where('user_id', '==', employee_id)
-            .get();
+        // Here we could Create a Notification document too, so it appears in the in-app list
+        // For now, verified devices exist and log
+        const devices = await DeviceToken.find({ user_id: employee_id });
+        if (devices.length === 0) return;
 
-        if (tokensSnapshot.empty) {
-            return;
-        }
-
-        const tokens = tokensSnapshot.docs.map(doc => doc.data().fcm_token);
-
-        const message = {
-            notification: {
-                title: '💰 Bulletin de Paie Disponible',
-                body: `Votre paie pour ${payrollData.month} est prête`
-            },
-            data: {
-                type: 'payroll_generated',
-                payroll_id: payrollData.payroll_id,
-                month: payrollData.month,
-                net_salary: payrollData.net_salary.toString()
-            },
-            tokens
-        };
-
-        await admin.messaging().sendMulticast(message);
+        console.log(`[PUSH MOCK] Payroll Notification for ${employee_id}`);
     } catch (error) {
         console.error('Error sending payroll notification:', error);
     }
@@ -200,31 +168,10 @@ const sendPayrollNotification = async (employee_id, payrollData) => {
  */
 const sendLeaveDecisionNotification = async (employee_id, leaveData, approved) => {
     try {
-        const tokensSnapshot = await db.collection('device_tokens')
-            .where('user_id', '==', employee_id)
-            .get();
+        const devices = await DeviceToken.find({ user_id: employee_id });
+        if (devices.length === 0) return;
 
-        if (tokensSnapshot.empty) {
-            return;
-        }
-
-        const tokens = tokensSnapshot.docs.map(doc => doc.data().fcm_token);
-
-        const message = {
-            notification: {
-                title: approved ? '✅ Congé Approuvé' : '❌ Congé Rejeté',
-                body: `Votre demande de congé a été ${approved ? 'approuvée' : 'rejetée'}`
-            },
-            data: {
-                type: approved ? 'leave_approved' : 'leave_rejected',
-                leave_id: leaveData.leave_id,
-                start_date: leaveData.start_date,
-                end_date: leaveData.end_date
-            },
-            tokens
-        };
-
-        await admin.messaging().sendMulticast(message);
+        console.log(`[PUSH MOCK] Leave Notification (${approved ? 'Approved' : 'Rejected'}) for ${employee_id}`);
     } catch (error) {
         console.error('Error sending leave notification:', error);
     }

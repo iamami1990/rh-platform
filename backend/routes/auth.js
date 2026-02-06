@@ -2,13 +2,16 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { v4: uuidv4 } = require('uuid');
-const { auth } = require('../config/firebase');
-const { getUsersCollection, getEmployeesCollection, getRefreshTokensCollection } = require('../config/database');
+const crypto = require('crypto');
+const User = require('../models/User');
+const RefreshToken = require('../models/RefreshToken');
+// const Employee = require('../models/Employee'); // Will be enabled once Employee model is migrated
 const { authenticate } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
 const { sendEmail } = require('../utils/emailService');
-const crypto = require('crypto');
+
+// Helper to validate email format (basic)
+const isValidEmail = (email) => /\S+@\S+\.\S+/.test(email);
 
 /**
  * @route   POST /api/auth/register
@@ -27,39 +30,41 @@ router.post('/register', authenticate, auditLogger('User Registration'), async (
             });
         }
 
-        // Create Firebase auth user
-        const userRecord = await auth.createUser({
-            email,
-            password,
-            emailVerified: false
-        });
+        if (!isValidEmail(email)) {
+            return res.status(400).json({ success: false, message: 'Invalid email format' });
+        }
 
-        // Hash password for our database
+        // Check if user exists
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ success: false, message: 'Email already registered' });
+        }
+
+        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create user document
-        const userData = {
-            user_id: userRecord.uid,
+        // Create user
+        const newUser = new User({
             email,
             password: hashedPassword,
-            role, // 'admin', 'manager', 'employee'
+            role,
             employee_id: employee_id || null,
-            created_at: new Date(),
-            last_login: null
-        };
+            created_at: new Date()
+        });
 
-        await getUsersCollection().doc(userRecord.uid).set(userData);
+        await newUser.save();
 
         res.status(201).json({
             success: true,
             message: 'User registered successfully',
             user: {
-                user_id: userRecord.uid,
-                email,
-                role
+                user_id: newUser._id,
+                email: newUser.email,
+                role: newUser.role
             }
         });
     } catch (error) {
+        console.error('Registration error:', error);
         res.status(500).json({
             success: false,
             message: 'Registration failed',
@@ -85,25 +90,17 @@ router.post('/login', auditLogger('User Login'), async (req, res) => {
             });
         }
 
-        // Find user by email
-        const usersSnapshot = await getUsersCollection()
-            .where('email', '==', email)
-            .limit(1)
-            .get();
-
-        if (usersSnapshot.empty) {
+        // Find user
+        const user = await User.findOne({ email });
+        if (!user) {
             return res.status(401).json({
                 success: false,
                 message: 'Invalid credentials'
             });
         }
 
-        const userDoc = usersSnapshot.docs[0];
-        const user = userDoc.data();
-
         // Verify password
         const isMatch = await bcrypt.compare(password, user.password);
-
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
@@ -112,40 +109,40 @@ router.post('/login', auditLogger('User Login'), async (req, res) => {
         }
 
         // Update last login
-        await getUsersCollection().doc(userDoc.id).update({
-            last_login: new Date()
-        });
+        user.last_login = new Date();
+        await user.save();
 
         // Generate JWT access token
         const token = jwt.sign(
-            { user_id: userDoc.id, email: user.email, role: user.role, employee_id: user.employee_id },
+            { user_id: user._id, email: user.email, role: user.role, employee_id: user.employee_id },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRE || '24h' }
         );
 
         // Generate Refresh Token
-        const refreshToken = crypto.randomBytes(40).toString('hex');
+        const refreshTokenValue = crypto.randomBytes(40).toString('hex');
         const refreshExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-        await getRefreshTokensCollection().doc(refreshToken).set({
-            user_id: userDoc.id,
-            expires_at: refreshExpires,
-            created_at: new Date()
+        await RefreshToken.create({
+            token: refreshTokenValue,
+            user: user._id,
+            expires_at: refreshExpires
         });
 
         res.json({
             success: true,
             message: 'Login successful',
             token,
-            refreshToken,
+            refreshToken: refreshTokenValue,
             user: {
-                user_id: userDoc.id,
+                user_id: user._id,
                 email: user.email,
                 role: user.role,
                 employee_id: user.employee_id
             }
         });
     } catch (error) {
+        console.error('Login error:', error);
         res.status(500).json({
             success: false,
             message: 'Login failed',
@@ -167,49 +164,49 @@ router.post('/refresh-token', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Refresh token required' });
         }
 
-        const rtDoc = await getRefreshTokensCollection().doc(refreshToken).get();
+        const rtDoc = await RefreshToken.findOne({ token: refreshToken }).populate('user');
 
-        if (!rtDoc.exists) {
+        if (!rtDoc) {
             return res.status(401).json({ success: false, message: 'Invalid refresh token' });
         }
 
-        const rtData = rtDoc.data();
-        if (new Date() > rtData.expires_at.toDate()) {
-            await getRefreshTokensCollection().doc(refreshToken).delete();
+        if (new Date() > rtDoc.expires_at) {
+            await RefreshToken.deleteOne({ _id: rtDoc._id });
             return res.status(401).json({ success: false, message: 'Refresh token expired' });
         }
 
-        // Get user info
-        const userDoc = await getUsersCollection().doc(rtData.user_id).get();
-        if (!userDoc.exists) {
+        const user = rtDoc.user;
+        if (!user) {
+            // Orphaned token
+            await RefreshToken.deleteOne({ _id: rtDoc._id });
             return res.status(401).json({ success: false, message: 'User no longer exists' });
         }
-        const user = userDoc.data();
 
         // Rotate Tokens (Delete old, create new)
-        await getRefreshTokensCollection().doc(refreshToken).delete();
+        await RefreshToken.deleteOne({ _id: rtDoc._id });
 
         const newToken = jwt.sign(
-            { user_id: userDoc.id, email: user.email, role: user.role, employee_id: user.employee_id },
+            { user_id: user._id, email: user.email, role: user.role, employee_id: user.employee_id },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRE || '24h' }
         );
 
-        const newRefreshToken = crypto.randomBytes(40).toString('hex');
+        const newRefreshTokenValue = crypto.randomBytes(40).toString('hex');
         const newExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-        await getRefreshTokensCollection().doc(newRefreshToken).set({
-            user_id: userDoc.id,
-            expires_at: newExpires,
-            created_at: new Date()
+        await RefreshToken.create({
+            token: newRefreshTokenValue,
+            user: user._id,
+            expires_at: newExpires
         });
 
         res.json({
             success: true,
             token: newToken,
-            refreshToken: newRefreshToken
+            refreshToken: newRefreshTokenValue
         });
     } catch (error) {
+        console.error('Refresh token error:', error);
         res.status(500).json({
             success: false,
             message: 'Token refresh failed',
@@ -227,7 +224,7 @@ router.post('/logout', authenticate, async (req, res) => {
     try {
         const { refreshToken } = req.body;
         if (refreshToken) {
-            await getRefreshTokensCollection().doc(refreshToken).delete();
+            await RefreshToken.deleteOne({ token: refreshToken });
         }
         res.json({
             success: true,
@@ -248,10 +245,9 @@ router.get('/me', authenticate, async (req, res) => {
         let employeeData = null;
 
         if (req.user.employee_id) {
-            const empDoc = await getEmployeesCollection().doc(req.user.employee_id).get();
-            if (empDoc.exists) {
-                employeeData = empDoc.data();
-            }
+            // Need to migrate Employee to Mongoose before this works fully
+            // const emp = await Employee.findById(req.user.employee_id);
+            // employeeData = emp;
         }
 
         res.json({
@@ -280,20 +276,18 @@ router.get('/me', authenticate, async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
     try {
         const { email } = req.body;
-        const usersSnapshot = await getUsersCollection().where('email', '==', email).limit(1).get();
+        const user = await User.findOne({ email });
 
-        if (usersSnapshot.empty) {
+        if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        const userDoc = usersSnapshot.docs[0];
         const resetToken = crypto.randomBytes(20).toString('hex');
         const resetExpires = new Date(Date.now() + 3600000); // 1 hour
 
-        await getUsersCollection().doc(userDoc.id).update({
-            reset_token: resetToken,
-            reset_token_expires: resetExpires
-        });
+        user.reset_token = resetToken;
+        user.reset_token_expires = resetExpires;
+        await user.save();
 
         const resetUrl = `http://localhost:3000/reset-password/${resetToken}`;
 
@@ -313,6 +307,7 @@ router.post('/forgot-password', async (req, res) => {
 
         res.json({ success: true, message: 'Reset email sent' });
     } catch (error) {
+        console.error('Forgot password error:', error);
         res.status(500).json({ success: false, message: 'Failed to send reset email', error: error.message });
     }
 });
@@ -326,34 +321,22 @@ router.post('/reset-password', auditLogger('Password Reset'), async (req, res) =
     try {
         const { token, newPassword } = req.body;
 
-        const snapshot = await getUsersCollection()
-            .where('reset_token', '==', token)
-            .get();
+        const user = await User.findOne({
+            reset_token: token,
+            reset_token_expires: { $gt: new Date() }
+        });
 
-        if (snapshot.empty) {
+        if (!user) {
             return res.status(400).json({ success: false, message: 'Invalid or expired token' });
-        }
-
-        const userDoc = snapshot.docs[0];
-        const userData = userDoc.data();
-
-        if (new Date() > userData.reset_token_expires.toDate()) {
-            return res.status(400).json({ success: false, message: 'Token expired' });
         }
 
         // Hash new password
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        // Update in Firebase Auth and Firestore
-        await auth.updateUser(userData.user_id, {
-            password: newPassword
-        });
-
-        await getUsersCollection().doc(userDoc.id).update({
-            password: hashedPassword,
-            reset_token: null,
-            reset_token_expires: null
-        });
+        user.password = hashedPassword;
+        user.reset_token = null;
+        user.reset_token_expires = null;
+        await user.save();
 
         res.json({ success: true, message: 'Password reset successful' });
     } catch (error) {

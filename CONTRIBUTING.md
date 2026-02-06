@@ -1,48 +1,63 @@
-# Contributing to Olympia HR Platform
+# Guide de Contribution - Olympia HR
 
-## Git Workflow
+Bienvenue dans le projet ! Voici comment configurer votre environnement pour travailler en équipe.
 
-We follow a strict Git workflow to ensure code stability and collaboration efficiency.
+## Pré-requis
 
-### Main Branches
-- **`main`**: The stable production code. NEVER push directly to `main`.
-- **`dev`**: The active development branch. All feature branches merge into `dev`.
+1.  **Node.js** (v18 ou v20 recommandés)
+2.  **MongoDB Community Server** (installé et démarré localement)
+3.  **MongoDB Compass** (pour visualiser la base de données)
 
-### Feature Branches
-Each developer must work on an isolated branch following this naming convention:
-- `backend-<feature>` (e.g., `backend-auth`, `backend-attendance`)
-- `mobile-kiosk-<feature>` (e.g., `mobile-kiosk-ui`)
-- `web-admin-<feature>` (e.g., `web-admin-ui`)
+## Initialisation du Projet
 
-### Workflow
-1. **Pull the latest `dev` branch**
-   ```bash
-   git checkout dev
-   git pull origin dev
-   ```
-2. **Create a new branch**
-   ```bash
-   git checkout -b <branch-name>
-   ```
-3. **Commit your changes**
-   - Write clear, descriptive commit messages.
-   - Do not commit secrets or unnecessary files.
-4. **Push to GitHub**
-   ```bash
-   git push origin <branch-name>
-   ```
-5. **Create a Pull Request (PR)**
-   - Target the `dev` branch.
-   - Request a review from a team member.
-   - Address feedback and merge only after approval.
+### 1. Cloner le projet
+\`\`\`bash
+git clone <votre-repo-url>
+cd RH
+\`\`\`
 
-## Project Structure
-- `backend/`: Node.js/Express API
-- `mobile-kiosk/` (formerly `mobile-app`): React Native Kiosk Application
-- `web-admin/`: React Admin Dashboard
-- `docs/`: Project documentation
+### 2. Backend (Serveur API)
+\`\`\`bash
+cd backend
+# Copier les variables d'environnement
+cp .env.example .env
 
-## Safety Rules
-- **NEVER** overwrite existing code without a backup plan.
-- **NEVER** merge broken code into `dev`.
-- **ALWAYS** test locally before pushing.
+# Installer les dépendances
+npm install
+
+# Créer le dossier d'uploads s'il n'existe pas
+mkdir -p public/uploads
+
+# Démarrer le serveur
+npm run dev
+\`\`\`
+Le serveur tourne sur `http://localhost:5000`.
+
+### 3. Web Admin (Interface Admin)
+\`\`\`bash
+cd web-admin
+# Copier les variables d'environnement
+cp .env.example .env
+
+# Installer les dépendances
+npm install
+
+# Démarrer le site
+npm start
+\`\`\`
+Le site tourne sur `http://localhost:3000`.
+
+### 4. Base de Données
+La base de données s'appelle `rh_platform`.
+Elle se créera automatiquement au premier démarrage.
+Pour créer un premier compte administrateur (si la base est vide), demandez le script de seed ou utilisez Postman sur la route `/api/auth/register` (si ouverte) ou créez-le manuellement en base.
+
+## Règles de Git
+- **Ne jamais commiter** les fichiers `.env` (ils contiennent vos secrets locaux).
+- **Toujours commiter** `package-lock.json` si possible (pour avoir les mêmes versions de librairies que l'équipe).
+- Travailler sur des branches séparées pour chaque fonctionnalité.
+
+## Architecture
+- **Backend**: Node.js + Express + Mongoose (MongoDB).
+- **Frontend**: React + Material UI.
+- **Stockage**: Les fichiers sont stockés localement dans `backend/public/uploads`.

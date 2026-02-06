@@ -27,9 +27,14 @@ const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
 const swaggerDocument = YAML.load('./swagger.yaml');
 
+const connectDB = require('./config/db');
+
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Connect to MongoDB
+connectDB();
 
 // Security middleware
 app.use(helmet());

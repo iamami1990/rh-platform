@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { getFaceEmbeddingsCollection } = require('../config/database');
+const FaceEmbedding = require('../models/FaceEmbedding');
 const { authenticate, authorize } = require('../middleware/auth');
 
 /**
  * Face Recognition Routes
  * 
- * Persistent implementation using Firestore
+ * Persistent implementation using MongoDB
  */
 
 /**
@@ -29,8 +29,12 @@ router.post('/enroll', authenticate, authorize('admin'), async (req, res) => {
             images_count: images_base64?.length || 0
         };
 
-        // Save to Firestore
-        await getFaceEmbeddingsCollection().doc(employee_id).set(embeddingData);
+        // Upsert logic
+        await FaceEmbedding.findOneAndUpdate(
+            { employee_id },
+            embeddingData,
+            { upsert: true, new: true }
+        );
 
         res.status(201).json({
             success: true,
@@ -63,11 +67,9 @@ router.post('/verify', authenticate, async (req, res) => {
         }
 
         // 1. Get all stored embeddings
-        const snapshot = await getFaceEmbeddingsCollection().get();
-        const storedEmbeddings = snapshot.docs.map(doc => doc.data());
+        const storedEmbeddings = await FaceEmbedding.find({});
 
         // 2. Mock embedding for current image (in production use ML model extract)
-        // const currentEmbedding = await extractEmbedding(image_base64);
         const currentEmbedding = Array(128).fill(0).map(() => Math.random());
 
         // 3. Compare with all stored embeddings using Euclidean distance
@@ -174,7 +176,7 @@ router.post('/liveness-check', authenticate, async (req, res) => {
 router.delete('/unenroll/:employee_id', authenticate, authorize('admin'), async (req, res) => {
     try {
         const { employee_id } = req.params;
-        await getFaceEmbeddingsCollection().doc(employee_id).delete();
+        await FaceEmbedding.findOneAndDelete({ employee_id });
 
         res.json({
             success: true,
@@ -198,14 +200,14 @@ router.delete('/unenroll/:employee_id', authenticate, authorize('admin'), async 
 router.get('/status/:employee_id', authenticate, async (req, res) => {
     try {
         const { employee_id } = req.params;
-        const doc = await getFaceEmbeddingsCollection().doc(employee_id).get();
+        const embedding = await FaceEmbedding.findOne({ employee_id });
 
         res.json({
             success: true,
             employee_id,
-            is_enrolled: doc.exists,
-            enrolled_at: doc.exists ? doc.data().enrolled_at : null,
-            images_count: doc.exists ? doc.data().images_count : 0
+            is_enrolled: !!embedding,
+            enrolled_at: embedding ? embedding.enrolled_at : null,
+            images_count: embedding ? embedding.images_count : 0
         });
     } catch (error) {
         res.status(500).json({

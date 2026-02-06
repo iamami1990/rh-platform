@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { v4: uuidv4 } = require('uuid');
-const { getEmployeesCollection } = require('../config/database');
+// const { v4: uuidv4 } = require('uuid'); // MongoDB handles IDs
+const Employee = require('../models/Employee');
 const { authenticate, authorize } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
 const { uploadToStorage } = require('../utils/fileUpload');
@@ -32,50 +32,55 @@ router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) =>
             maxSalary
         } = req.query;
 
-        let query = getEmployeesCollection();
+        const query = {};
 
-        // Apply Firestore filters (Equality only generally)
-        if (department) query = query.where('department', '==', department);
-        if (status) query = query.where('status', '==', status);
-        if (contract_type) query = query.where('contract_type', '==', contract_type);
-        if (position) query = query.where('position', '==', position);
+        // Filters
+        if (department) query.department = department;
+        if (status) query.status = status;
+        if (contract_type) query.contract_type = contract_type;
+        if (position) query.position = position;
 
-        // Execute query
-        const snapshot = await query.get();
-        let employees = snapshot.docs.map(doc => ({
-            employee_id: doc.id,
-            ...doc.data()
-        }));
+        // Range filters
+        if (minSalary || maxSalary) {
+            query.gross_salary = {};
+            if (minSalary) query.gross_salary.$gte = Number(minSalary);
+            if (maxSalary) query.gross_salary.$lte = Number(maxSalary);
+        }
 
-        // Advanced filtering in-memory
-        if (minSalary) employees = employees.filter(emp => emp.gross_salary >= Number(minSalary));
-        if (maxSalary) employees = employees.filter(emp => emp.gross_salary <= Number(maxSalary));
-
-        // Search filter
+        // Search
         if (search) {
-            const s = search.toLowerCase();
-            employees = employees.filter(emp =>
-                emp.firstName?.toLowerCase().includes(s) ||
-                emp.lastName?.toLowerCase().includes(s) ||
-                emp.email?.toLowerCase().includes(s) ||
-                emp.matricule?.toLowerCase().includes(s)
-            );
+            query.$or = [
+                { firstName: { $regex: search, $options: 'i' } },
+                { lastName: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } },
+                { matricule: { $regex: search, $options: 'i' } }
+            ];
         }
 
         // Pagination
-        const startIndex = (page - 1) * limit;
-        const endIndex = startIndex + parseInt(limit);
-        const paginatedEmployees = employees.slice(startIndex, endIndex);
+        const options = {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            sort: { created_at: -1 }
+        };
+
+        // Note: Using pure Mongoose find/skip/limit
+        const total = await Employee.countDocuments(query);
+        const employees = await Employee.find(query)
+            .sort({ created_at: -1 })
+            .skip((options.page - 1) * options.limit)
+            .limit(options.limit);
 
         res.json({
             success: true,
-            count: paginatedEmployees.length,
-            total: employees.length,
-            page: parseInt(page),
-            totalPages: Math.ceil(employees.length / limit),
-            employees: paginatedEmployees
+            count: employees.length,
+            total,
+            page: options.page,
+            totalPages: Math.ceil(total / options.limit),
+            employees
         });
     } catch (error) {
+        console.error(error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch employees',
@@ -91,20 +96,21 @@ router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) =>
  */
 router.get('/:id', authenticate, async (req, res) => {
     try {
-        const doc = await getEmployeesCollection().doc(req.params.id).get();
+        const employee = await Employee.findById(req.params.id);
 
-        if (!doc.exists) {
+        if (!employee) {
             return res.status(404).json({
                 success: false,
                 message: 'Employee not found'
             });
         }
 
+        // Map to expected format if needed (Mongoose docs are close enough)
         res.json({
             success: true,
             employee: {
-                employee_id: doc.id,
-                ...doc.data()
+                employee_id: employee._id, // Add alias for frontend compatibility
+                ...employee.toObject()
             }
         });
     } catch (error) {
@@ -125,23 +131,22 @@ router.post('/', authenticate, authorize('admin'), auditLogger('Create Employee'
     try {
         const employeeData = {
             ...req.body,
-            status: req.body.status || 'active',
-            created_at: new Date(),
-            updated_at: new Date()
+            status: req.body.status || 'active'
         };
 
-        const employeeId = uuidv4();
-        await getEmployeesCollection().doc(employeeId).set(employeeData);
+        const newEmployee = new Employee(employeeData);
+        await newEmployee.save();
 
         res.status(201).json({
             success: true,
             message: 'Employee created successfully',
             employee: {
-                employee_id: employeeId,
-                ...employeeData
+                employee_id: newEmployee._id,
+                ...newEmployee.toObject()
             }
         });
     } catch (error) {
+        console.error('Error creating employee:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to create employee',
@@ -157,18 +162,23 @@ router.post('/', authenticate, authorize('admin'), auditLogger('Create Employee'
  */
 router.put('/:id', authenticate, authorize('admin'), auditLogger('Update Employee'), async (req, res) => {
     try {
-        const updateData = {
-            ...req.body,
-            updated_at: new Date()
-        };
+        const updatedEmployee = await Employee.findByIdAndUpdate(
+            req.params.id,
+            { $set: req.body },
+            { new: true, runValidators: true }
+        );
 
-        await getEmployeesCollection().doc(req.params.id).update(updateData);
+        if (!updatedEmployee) {
+            return res.status(404).json({ success: false, message: 'Employee not found' });
+        }
 
         res.json({
             success: true,
-            message: 'Employee updated successfully'
+            message: 'Employee updated successfully',
+            employee: updatedEmployee
         });
     } catch (error) {
+        console.error('Error updating employee:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to update employee',
@@ -184,10 +194,15 @@ router.put('/:id', authenticate, authorize('admin'), auditLogger('Update Employe
  */
 router.delete('/:id', authenticate, authorize('admin'), auditLogger('Delete Employee'), async (req, res) => {
     try {
-        await getEmployeesCollection().doc(req.params.id).update({
-            status: 'inactive',
-            updated_at: new Date()
-        });
+        const deletedEmployee = await Employee.findByIdAndUpdate(
+            req.params.id,
+            { status: 'inactive' },
+            { new: true }
+        );
+
+        if (!deletedEmployee) {
+            return res.status(404).json({ success: false, message: 'Employee not found' });
+        }
 
         res.json({
             success: true,
@@ -217,26 +232,22 @@ router.post('/:id/documents', authenticate, authorize('admin', 'manager'), uploa
         const url = await uploadToStorage(req.file, `employees/${req.params.id}`);
 
         const docData = {
-            id: uuidv4(),
             name: name || req.file.originalname,
             type: type || 'other',
             url,
             uploaded_at: new Date(),
-            uploaded_by: req.user.user_id
+            uploaded_by: req.user.user_id, // This comes from JWT
         };
 
-        // Update employee document list
-        const empRef = getEmployeesCollection().doc(req.params.id);
-        const empDoc = await empRef.get();
-        if (!empDoc.exists) {
+        const employee = await Employee.findByIdAndUpdate(
+            req.params.id,
+            { $push: { documents: docData } },
+            { new: true }
+        );
+
+        if (!employee) {
             return res.status(404).json({ success: false, message: 'Employee not found' });
         }
-
-        const currentDocs = empDoc.data().documents || [];
-        await empRef.update({
-            documents: [...currentDocs, docData],
-            updated_at: new Date()
-        });
 
         res.json({
             success: true,

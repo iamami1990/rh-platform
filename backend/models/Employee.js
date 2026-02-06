@@ -1,179 +1,93 @@
-const Joi = require('joi');
+const mongoose = require('mongoose');
 
-/**
- * Employee Data Validation Schema
- * Compliant with Tunisian labor laws and HR requirements
- */
-
-const EmployeeSchema = Joi.object({
-    // Personal Information
-    firstName: Joi.string().min(2).max(50).required()
-        .messages({
-            'string.empty': 'Le prénom est requis',
-            'string.min': 'Le prénom doit contenir au moins 2 caractères'
-        }),
-
-    lastName: Joi.string().min(2).max(50).required()
-        .messages({
-            'string.empty': 'Le nom est requis',
-            'string.min': 'Le nom doit contenir au moins 2 caractères'
-        }),
-
-    email: Joi.string().email().required()
-        .messages({
-            'string.email': 'Email invalide',
-            'string.empty': 'L\'email est requis'
-        }),
-
-    phone: Joi.string().pattern(/^[0-9]{8}$/).optional()
-        .messages({
-            'string.pattern.base': 'Le numéro de téléphone doit contenir 8 chiffres'
-        }),
-
-    cin: Joi.string().pattern(/^[0-9]{8}$/).optional()
-        .messages({
-            'string.pattern.base': 'Le CIN doit contenir 8 chiffres'
-        }),
-
-    birthDate: Joi.date().max('now').optional(),
-
-    address: Joi.string().max(200).optional(),
-
-    marital_status: Joi.string().valid('single', 'married', 'divorced', 'widowed', 'célibataire', 'marié', 'divorcé', 'veuf').optional(),
-
-    children_count: Joi.number().integer().min(0).max(20).default(0),
-
-    // Professional Information
-    matricule: Joi.string().max(50).optional(),
-
-    department: Joi.string().required()
-        .messages({
-            'string.empty': 'Le département est requis'
-        }),
-
-    position: Joi.string().required()
-        .messages({
-            'string.empty': 'Le poste est requis'
-        }),
-
-    contract_type: Joi.string().valid('CDI', 'CDD', 'SIVP', 'KARAMA', 'Freelance', 'Internship').required()
-        .messages({
-            'any.only': 'Type de contrat invalide',
-            'string.empty': 'Le type de contrat est requis'
-        }),
-
-    hireDate: Joi.date().max('now').required()
-        .messages({
-            'date.base': 'Date d\'embauche invalide',
-            'any.required': 'La date d\'embauche est requise'
-        }),
-
-    endDate: Joi.date().min(Joi.ref('hireDate')).optional(),
-
-    status: Joi.string().valid('active', 'inactive', 'suspended', 'on_leave').default('active'),
-
-    // Salary Information
-    salary_brut: Joi.number().positive().required()
-        .messages({
-            'number.positive': 'Le salaire brut doit être positif',
-            'any.required': 'Le salaire brut est requis'
-        }),
-
-    gross_salary: Joi.number().positive().optional(), // Alias for salary_brut
-
-    // Allowances
-    transport_allowance: Joi.number().min(0).default(60), // Minimum légal Tunisie
-
-    meal_allowance: Joi.number().min(0).default(0),
-
-    // Work Configuration
-    work_start_time: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).default('08:00')
-        .messages({
-            'string.pattern.base': 'Format d\'heure invalide (HH:MM)'
-        }),
-
-    work_end_time: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).default('17:00'),
-
-    workplace_location: Joi.object({
-        lat: Joi.number().min(-90).max(90).required(),
-        lng: Joi.number().min(-180).max(180).required(),
-        address: Joi.string().optional()
-    }).optional(),
-
-    // Social Security
-    cnss_number: Joi.string().max(50).optional(),
-
-    bank_account: Joi.object({
-        iban: Joi.string().pattern(/^TN[0-9]{22}$/).optional(),
-        rib: Joi.string().pattern(/^[0-9]{20}$/).optional(),
-        bank_name: Joi.string().optional()
-    }).optional(),
-
-    // Documents
-    documents: Joi.array().items(
-        Joi.object({
-            id: Joi.string().required(),
-            name: Joi.string().required(),
-            type: Joi.string().valid('CIN', 'CV', 'Contract', 'Diploma', 'Medical', 'Other').required(),
-            url: Joi.string().uri().required(),
-            uploaded_at: Joi.date().required(),
-            uploaded_by: Joi.string().required(),
-            expires_at: Joi.date().optional()
-        })
-    ).optional(),
-
-    // Manager & Reporting
-    manager_id: Joi.string().optional(),
-
-    // Metadata
-    created_at: Joi.date().default(() => new Date()),
-    updated_at: Joi.date().default(() => new Date()),
-
-    // Profile Image
-    profile_image_url: Joi.string().uri().optional(),
-
-    // Emergency Contact
-    emergency_contact: Joi.object({
-        name: Joi.string().required(),
-        phone: Joi.string().pattern(/^[0-9]{8}$/).required(),
-        relationship: Joi.string().optional()
-    }).optional(),
-
-    // Notes
-    notes: Joi.string().max(1000).optional()
+const documentSchema = new mongoose.Schema({
+    id: String, // Keep string ID compatibility or use _id
+    name: String,
+    type: {
+        type: String,
+        enum: ['CIN', 'CV', 'Contract', 'Diploma', 'Medical', 'Other'],
+        default: 'Other'
+    },
+    url: String,
+    uploaded_at: { type: Date, default: Date.now },
+    uploaded_by: String,
+    expires_at: Date
 });
 
-/**
- * Validate employee data
- * @param {Object} data - Employee data to validate
- * @returns {Object} Validation result
- */
-const validateEmployee = (data) => {
-    return EmployeeSchema.validate(data, {
-        abortEarly: false,
-        stripUnknown: true
-    });
-};
+const employeeSchema = new mongoose.Schema({
+    employee_id: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
+    firstName: { type: String, required: true, trim: true },
+    lastName: { type: String, required: true, trim: true },
+    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    phone: String,
+    cin: String,
+    birthDate: Date,
+    address: String,
+    marital_status: String,
+    children_count: { type: Number, default: 0 },
 
-/**
- * Validate partial update (PATCH)
- * @param {Object} data - Partial employee data
- * @returns {Object} Validation result
- */
-const validateEmployeeUpdate = (data) => {
-    const UpdateSchema = EmployeeSchema.fork(
-        ['firstName', 'lastName', 'email', 'department', 'position', 'contract_type', 'hireDate', 'salary_brut'],
-        (schema) => schema.optional()
-    );
+    // Professional
+    matricule: String,
+    department: { type: String, required: true },
+    position: { type: String, required: true },
+    contract_type: {
+        type: String,
+        required: true,
+        enum: ['CDI', 'CDD', 'SIVP', 'KARAMA', 'Freelance', 'Internship']
+    },
+    hireDate: { type: Date, required: true },
+    endDate: Date,
+    status: {
+        type: String,
+        enum: ['active', 'inactive', 'suspended', 'on_leave'],
+        default: 'active'
+    },
 
-    return UpdateSchema.validate(data, {
-        abortEarly: false,
-        stripUnknown: true
-    });
-};
+    // Financial
+    salary_brut: { type: Number, required: true }, // Legacy
+    gross_salary: { type: Number }, // Alias
+    transport_allowance: { type: Number, default: 60 },
+    meal_allowance: { type: Number, default: 0 },
+    cnss_number: String,
+    bank_account: {
+        iban: String,
+        rib: String,
+        bank_name: String
+    },
 
-module.exports = {
-    EmployeeSchema,
-    validateEmployee,
-    validateEmployeeUpdate
-};
+    // Config
+    work_start_time: { type: String, default: '08:00' },
+    work_end_time: { type: String, default: '17:00' },
+    workplace_location: {
+        lat: Number,
+        lng: Number,
+        address: String
+    },
+
+    // Relations & Docs
+    manager_id: { type: String, ref: 'User' }, // Or ObjectId if we migrate everything, but assume String for now
+    documents: [documentSchema],
+    profile_image_url: String,
+
+    emergency_contact: {
+        name: String,
+        phone: String,
+        relationship: String
+    },
+    notes: String
+}, {
+    timestamps: true
+});
+
+// Alias handling
+employeeSchema.pre('save', async function () {
+    if (this.salary_brut && !this.gross_salary) {
+        this.gross_salary = this.salary_brut;
+    }
+});
+
+module.exports = mongoose.model('Employee', employeeSchema);

@@ -1,19 +1,51 @@
 {
-    "expo": {
-        "name": "Olympia HR",
-        "slug": "olympia-hr-mobile",
-        "version": "1.0.0",
-        "orientation": "portrait",
-        "userInterfaceStyle": "light",
-        "assetBundlePatterns": [
-            "**/*"
-        ],
-        "ios": {
-            "supportsTablet": true
-        },
-        "android": {
-            "package": "com.olympia.hr",
-            "usesCleartextTraffic": true
+  "expo": {
+    "name": "Olympia HR",
+    "slug": "olympia-hr-mobile",
+    "owner": "ismail1991",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.olympia.hr",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Olympia HR to access your camera for facial recognition check-in."
         }
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "dbc528d6-8020-4f98-8d48-84825eb43895"
+      }
     }
+  }
 }

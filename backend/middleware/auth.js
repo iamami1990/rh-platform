@@ -1,6 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { auth } = require('../config/firebase');
-const { getUsersCollection } = require('../config/database');
+const User = require('../models/User');
 
 /**
  * Authenticate user using JWT token
@@ -23,9 +22,9 @@ const authenticate = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
         // Get user from database
-        const userDoc = await getUsersCollection().doc(decoded.user_id).get();
+        const user = await User.findById(decoded.user_id).select('-password');
 
-        if (!userDoc.exists) {
+        if (!user) {
             return res.status(401).json({
                 success: false,
                 message: 'Invalid token. User not found.'
@@ -34,8 +33,8 @@ const authenticate = async (req, res, next) => {
 
         // Attach user to request
         req.user = {
-            user_id: userDoc.id,
-            ...userDoc.data()
+            user_id: user._id.toString(),
+            ...user.toObject()
         };
 
         next();

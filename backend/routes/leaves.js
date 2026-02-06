@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { v4: uuidv4 } = require('uuid');
 const moment = require('moment');
-const { getLeavesCollection, getEmployeesCollection } = require('../config/database');
+const Leave = require('../models/Leave');
+const Employee = require('../models/Employee');
 const { authenticate, authorize } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
 const { uploadToStorage } = require('../utils/fileUpload');
@@ -33,7 +33,7 @@ router.post('/', authenticate, upload.single('justification'), auditLogger('Subm
         const end = moment(end_date);
         const days_requested = end.diff(start, 'days') + 1;
 
-        const leaveData = {
+        const newLeave = new Leave({
             employee_id,
             leave_type, // 'annual', 'sick', 'maternity', 'unpaid'
             start_date,
@@ -45,17 +45,16 @@ router.post('/', authenticate, upload.single('justification'), auditLogger('Subm
             approved_by: null,
             created_at: new Date(),
             approved_at: null
-        };
+        });
 
-        const leaveId = uuidv4();
-        await getLeavesCollection().doc(leaveId).set(leaveData);
+        await newLeave.save();
 
         res.status(201).json({
             success: true,
             message: 'Leave request submitted successfully',
             leave: {
-                leave_id: leaveId,
-                ...leaveData
+                leave_id: newLeave._id,
+                ...newLeave.toObject()
             }
         });
     } catch (error) {
@@ -76,33 +75,20 @@ router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) =>
     try {
         const { status, employee_id } = req.query;
 
-        let query = getLeavesCollection();
+        const query = {};
 
-        if (status) {
-            query = query.where('status', '==', status);
-        }
+        if (status) query.status = status;
+        if (employee_id) query.employee_id = employee_id;
 
-        if (employee_id) {
-            query = query.where('employee_id', '==', employee_id);
-        }
-
-        const snapshot = await query.get();
-        let leaves = snapshot.docs.map(doc => ({
-            leave_id: doc.id,
-            ...doc.data()
-        }));
-
-        // Sort in-memory to avoid missing index errors in Firestore
-        leaves.sort((a, b) => {
-            const dateA = a.created_at?.toDate?.() || new Date(a.created_at);
-            const dateB = b.created_at?.toDate?.() || new Date(b.created_at);
-            return dateB - dateA; // Descending
-        });
+        const leaves = await Leave.find(query).sort({ created_at: -1 });
 
         res.json({
             success: true,
             count: leaves.length,
-            leaves
+            leaves: leaves.map(l => ({
+                leave_id: l._id,
+                ...l.toObject()
+            }))
         });
     } catch (error) {
         console.error(`[${new Date().toISOString()}] FETCH LEAVES ERROR:`, error);
@@ -121,38 +107,18 @@ router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) =>
  */
 router.get('/calendar', authenticate, authorize('admin', 'manager'), async (req, res) => {
     try {
-        const snapshot = await getLeavesCollection()
-            .where('status', '==', 'approved')
-            .get();
-
-        const leaves = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
-
-        // Fetch employee names for each leave
-        const employeeIds = [...new Set(leaves.map(l => l.employee_id))];
-        const employeeMap = {};
-
-        // In a real app with many employees, we'd batch this or store names in the leave doc
-        for (const id of employeeIds) {
-            const empDoc = await getEmployeesCollection().doc(id).get();
-            if (empDoc.exists) {
-                const data = empDoc.data();
-                employeeMap[id] = `${data.firstName} ${data.lastName}`;
-            }
-        }
+        const leaves = await Leave.find({ status: 'approved' }).populate('employee_id', 'firstName lastName');
 
         const events = leaves.map(l => ({
-            id: l.id,
-            title: `${employeeMap[l.employee_id] || 'Unknown'} - ${l.leave_type}`,
+            id: l._id,
+            title: `${l.employee_id ? (l.employee_id.firstName + ' ' + l.employee_id.lastName) : 'Unknown'} - ${l.leave_type}`,
             start: l.start_date,
             end: l.end_date,
             color: l.leave_type === 'annual' ? '#4caf50' :
                 l.leave_type === 'sick' ? '#f44336' :
                     l.leave_type === 'maternity' ? '#e91e63' : '#9c27b0',
             extendedProps: {
-                employee_id: l.employee_id,
+                employee_id: l.employee_id?._id,
                 leave_type: l.leave_type,
                 reason: l.reason
             }
@@ -174,11 +140,19 @@ router.get('/calendar', authenticate, authorize('admin', 'manager'), async (req,
  */
 router.put('/:id/approve', authenticate, authorize('admin', 'manager'), async (req, res) => {
     try {
-        await getLeavesCollection().doc(req.params.id).update({
-            status: 'approved',
-            approved_by: req.user.user_id,
-            approved_at: new Date()
-        });
+        const leave = await Leave.findByIdAndUpdate(
+            req.params.id,
+            {
+                status: 'approved',
+                approved_by: req.user.user_id,
+                approved_at: new Date()
+            },
+            { new: true }
+        );
+
+        if (!leave) {
+            return res.status(404).json({ success: false, message: 'Leave request not found' });
+        }
 
         res.json({
             success: true,
@@ -200,11 +174,19 @@ router.put('/:id/approve', authenticate, authorize('admin', 'manager'), async (r
  */
 router.put('/:id/reject', authenticate, authorize('admin', 'manager'), async (req, res) => {
     try {
-        await getLeavesCollection().doc(req.params.id).update({
-            status: 'rejected',
-            approved_by: req.user.user_id,
-            approved_at: new Date()
-        });
+        const leave = await Leave.findByIdAndUpdate(
+            req.params.id,
+            {
+                status: 'rejected',
+                approved_by: req.user.user_id,
+                approved_at: new Date()
+            },
+            { new: true }
+        );
+
+        if (!leave) {
+            return res.status(404).json({ success: false, message: 'Leave request not found' });
+        }
 
         res.json({
             success: true,
@@ -229,12 +211,10 @@ router.get('/balance/:employee_id', authenticate, async (req, res) => {
         const currentYear = moment().year();
 
         // Get approved leaves for current year
-        const snapshot = await getLeavesCollection()
-            .where('employee_id', '==', req.params.employee_id)
-            .where('status', '==', 'approved')
-            .get();
-
-        const leaves = snapshot.docs.map(doc => doc.data());
+        const leaves = await Leave.find({
+            employee_id: req.params.employee_id,
+            status: 'approved'
+        });
 
         // Calculate used days by leave type
         const usedDays = leaves

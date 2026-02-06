@@ -303,8 +303,8 @@ const EmployeesPage = () => {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredEmployees.map((emp) => (
-                                    <TableRow key={emp.employee_id || emp.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                filteredEmployees.map((emp, index) => (
+                                    <TableRow key={emp.employee_id || emp.id || index} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                                         <TableCell>
                                             <Box display="flex" alignItems="center" gap={2}>
                                                 <Avatar sx={{ bgcolor: 'primary.light', fontWeight: 700 }}>

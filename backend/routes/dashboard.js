@@ -1,13 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const moment = require('moment');
-const {
-    getEmployeesCollection,
-    getAttendanceCollection,
-    getLeavesCollection,
-    getPayrollCollection,
-    getSentimentCollection
-} = require('../config/database');
+const Employee = require('../models/Employee');
+const Attendance = require('../models/Attendance');
+const Leave = require('../models/Leave');
+const Payroll = require('../models/Payroll');
+const Sentiment = require('../models/Sentiment');
 const { authenticate, authorize } = require('../middleware/auth');
 
 /**
@@ -21,50 +19,36 @@ router.get('/admin', authenticate, authorize('admin'), async (req, res) => {
         const currentMonth = moment().format('YYYY-MM');
 
         // Total employees
-        const empSnapshot = await getEmployeesCollection()
-            .where('status', '==', 'active')
-            .get();
-        const totalEmployees = empSnapshot.size;
+        const totalEmployees = await Employee.countDocuments({ status: 'active' });
 
         // Employees on leave today
-        const leavesSnapshot = await getLeavesCollection()
-            .where('status', '==', 'approved')
-            .get();
-
-        const onLeaveToday = leavesSnapshot.docs.filter(doc => {
-            const leave = doc.data();
-            return today >= leave.start_date && today <= leave.end_date;
-        }).length;
+        const onLeaveToday = await Leave.countDocuments({
+            status: 'approved',
+            start_date: { $lte: today },
+            end_date: { $gte: today }
+        });
 
         // Today's attendance
-        const todayAttendance = await getAttendanceCollection()
-            .where('date', '==', today)
-            .get();
+        const todayAttendance = await Attendance.find({ date: today });
 
-        const presentToday = todayAttendance.size;
-        const lateToday = todayAttendance.docs.filter(doc => doc.data().status === 'late').length;
+        const presentToday = todayAttendance.length;
+        const lateToday = todayAttendance.filter(a => a.status === 'late').length;
         const attendanceRate = totalEmployees > 0 ? ((presentToday / totalEmployees) * 100).toFixed(2) : 0;
 
         // Payroll stats for current month
-        const payrollSnapshot = await getPayrollCollection()
-            .where('month', '==', currentMonth)
-            .get();
+        const payrolls = await Payroll.find({ month: currentMonth });
 
-        const payrollGenerated = payrollSnapshot.size;
-        const totalSalaryMass = payrollSnapshot.docs
-            .reduce((sum, doc) => sum + (doc.data().net_salary || 0), 0);
+        const payrollGenerated = payrolls.length;
+        const totalSalaryMass = payrolls.reduce((sum, p) => sum + (p.net_salary || 0), 0);
 
         // Sentiment overview
-        const sentimentSnapshot = await getSentimentCollection()
-            .where('month', '==', currentMonth)
-            .get();
+        const sentiments = await Sentiment.find({ month: currentMonth });
 
-        const sentimentData = sentimentSnapshot.docs.map(doc => doc.data());
-        const avgSentiment = sentimentData.length > 0
-            ? (sentimentData.reduce((sum, s) => sum + s.overall_score, 0) / sentimentData.length).toFixed(2)
+        const avgSentiment = sentiments.length > 0
+            ? (sentiments.reduce((sum, s) => sum + s.overall_score, 0) / sentiments.length).toFixed(2)
             : 0;
 
-        const atRiskEmployees = sentimentData.filter(s => s.risk_level === 'high').length;
+        const atRiskEmployees = sentiments.filter(s => s.risk_level === 'high').length;
 
         res.json({
             success: true,
@@ -145,23 +129,16 @@ router.get('/employee', authenticate, async (req, res) => {
         const currentMonth = moment().format('YYYY-MM');
 
         // Latest payroll
-        const latestPayroll = await getPayrollCollection()
-            .where('employee_id', '==', employee_id)
-            .orderBy('generated_at', 'desc')
-            .limit(1)
-            .get();
-
-        const payroll = latestPayroll.empty ? null : latestPayroll.docs[0].data();
+        const payroll = await Payroll.findOne({ employee_id }).sort({ generated_at: -1 });
 
         // Leave balance
-        const approvedLeaves = await getLeavesCollection()
-            .where('employee_id', '==', employee_id)
-            .where('status', '==', 'approved')
-            .get();
+        const approvedLeaves = await Leave.find({
+            employee_id,
+            status: 'approved',
+            leave_type: 'annual'
+        });
 
-        const usedAnnualDays = approvedLeaves.docs
-            .filter(doc => doc.data().leave_type === 'annual')
-            .reduce((sum, doc) => sum + doc.data().days_requested, 0);
+        const usedAnnualDays = approvedLeaves.reduce((sum, l) => sum + l.days_requested, 0);
 
         const leaveBalance = {
             allocated: 25,
@@ -170,25 +147,19 @@ router.get('/employee', authenticate, async (req, res) => {
         };
 
         // Attendance this month
-        const monthAttendance = await getAttendanceCollection()
-            .where('employee_id', '==', employee_id)
-            .get();
+        const startDate = moment(currentMonth, 'YYYY-MM').startOf('month').format('YYYY-MM-DD');
+        const endDate = moment(currentMonth, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
 
-        const thisMonthRecords = monthAttendance.docs
-            .map(doc => doc.data())
-            .filter(r => r.date.startsWith(currentMonth));
+        const monthAttendance = await Attendance.find({
+            employee_id,
+            date: { $gte: startDate, $lte: endDate }
+        });
 
-        const presentDays = thisMonthRecords.length;
-        const lateDays = thisMonthRecords.filter(r => r.status === 'late').length;
+        const presentDays = monthAttendance.length;
+        const lateDays = monthAttendance.filter(r => r.status === 'late').length;
 
         // Latest sentiment
-        const latestSentiment = await getSentimentCollection()
-            .where('employee_id', '==', employee_id)
-            .orderBy('created_at', 'desc')
-            .limit(1)
-            .get();
-
-        const sentiment = latestSentiment.empty ? null : latestSentiment.docs[0].data();
+        const sentiment = await Sentiment.findOne({ employee_id }).sort({ created_at: -1 });
 
         res.json({
             success: true,

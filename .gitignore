@@ -39,6 +39,7 @@ coverage/
 .nyc_output/
 
 # Mobile specific
+mobile-app/.expo/
 mobile-app/android/app/build/
 mobile-app/ios/Pods/
 mobile-app/ios/build/

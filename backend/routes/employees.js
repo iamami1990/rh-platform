@@ -2,16 +2,11 @@ const express = require('express');
 const router = express.Router();
 // const { v4: uuidv4 } = require('uuid'); // MongoDB handles IDs
 const Employee = require('../models/Employee');
+const User = require('../models/User');
 const { authenticate, authorize } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
-const { uploadToStorage } = require('../utils/fileUpload');
-const multer = require('multer');
-
-// Configure multer for memory storage
-const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
-});
+const { uploadSingle } = require('../middleware/upload');
+const bcrypt = require('bcryptjs');
 
 /**
  * @route   GET /api/employees
@@ -77,7 +72,10 @@ router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) =>
             total,
             page: options.page,
             totalPages: Math.ceil(total / options.limit),
-            employees
+            employees: employees.map(e => ({
+                employee_id: e._id,
+                ...e.toObject()
+            }))
         });
     } catch (error) {
         console.error(error);
@@ -175,7 +173,10 @@ router.put('/:id', authenticate, authorize('admin'), auditLogger('Update Employe
         res.json({
             success: true,
             message: 'Employee updated successfully',
-            employee: updatedEmployee
+            employee: {
+                employee_id: updatedEmployee._id,
+                ...updatedEmployee.toObject()
+            }
         });
     } catch (error) {
         console.error('Error updating employee:', error);
@@ -222,19 +223,19 @@ router.delete('/:id', authenticate, authorize('admin'), auditLogger('Delete Empl
  * @desc    Upload document for employee
  * @access  Private (Admin, Manager)
  */
-router.post('/:id/documents', authenticate, authorize('admin', 'manager'), upload.single('document'), auditLogger('Upload Employee Document'), async (req, res) => {
+router.post('/:id/documents', authenticate, authorize('admin', 'manager'), uploadSingle('document'), auditLogger('Upload Employee Document'), async (req, res) => {
     try {
         const { type, name } = req.body;
-        if (!req.file) {
+        if (!req.file || !req.fileUrl) {
             return res.status(400).json({ success: false, message: 'No file uploaded' });
         }
-
-        const url = await uploadToStorage(req.file, `employees/${req.params.id}`);
+        const allowedTypes = ['CIN', 'CV', 'Contract', 'Diploma', 'Medical', 'Other'];
+        const normalizedType = allowedTypes.includes(type) ? type : 'Other';
 
         const docData = {
             name: name || req.file.originalname,
-            type: type || 'other',
-            url,
+            type: normalizedType,
+            url: req.fileUrl,
             uploaded_at: new Date(),
             uploaded_by: req.user.user_id, // This comes from JWT
         };
@@ -257,6 +258,38 @@ router.post('/:id/documents', authenticate, authorize('admin', 'manager'), uploa
     } catch (error) {
         console.error('UPLOAD ERROR:', error);
         res.status(500).json({ success: false, message: 'Upload failed', error: error.message });
+    }
+});
+
+/**
+ * @route   PUT /api/employees/:id/pin
+ * @desc    Set or reset kiosk PIN for employee
+ * @access  Private (Admin, RH)
+ */
+router.put('/:id/pin', authenticate, authorize('admin', 'rh'), auditLogger('Set Kiosk PIN'), async (req, res) => {
+    try {
+        const { pin } = req.body;
+        if (!pin || pin.length < 4) {
+            return res.status(400).json({ success: false, message: 'PIN must be at least 4 digits' });
+        }
+
+        const employee = await Employee.findById(req.params.id);
+        if (!employee) {
+            return res.status(404).json({ success: false, message: 'Employee not found' });
+        }
+
+        const user = await User.findOne({ $or: [{ employee: employee._id }, { employee_id: employee._id }] });
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found for this employee' });
+        }
+
+        const hashedPin = await bcrypt.hash(pin, 10);
+        user.kiosk_pin_hash = hashedPin;
+        await user.save();
+
+        res.json({ success: true, message: 'Kiosk PIN updated' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to update PIN', error: error.message });
     }
 });
 

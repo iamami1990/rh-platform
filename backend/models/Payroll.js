@@ -1,7 +1,9 @@
 const mongoose = require('mongoose');
 
 const payrollSchema = new mongoose.Schema({
-    employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+    employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+    // Legacy compatibility
+    employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     employee_name: { type: String, required: true },
     month: { type: String, required: true }, // YYYY-MM
     gross_salary: { type: Number, required: true },
@@ -84,6 +86,16 @@ const payrollSchema = new mongoose.Schema({
 });
 
 // Index for uniqueness per employee per month
-payrollSchema.index({ employee_id: 1, month: 1 }, { unique: true });
+payrollSchema.pre('validate', function (next) {
+    if (this.employee && !this.employee_id) {
+        this.employee_id = this.employee;
+    }
+    if (this.employee_id && !this.employee) {
+        this.employee = this.employee_id;
+    }
+    next();
+});
+
+payrollSchema.index({ employee: 1, month: 1 }, { unique: true });
 
 module.exports = mongoose.model('Payroll', payrollSchema);

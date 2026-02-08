@@ -1,7 +1,16 @@
 const request = require('supertest');
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const app = require('../server');
+const User = require('../models/User');
 
 describe('Authentication API', () => {
+    beforeAll(async () => {
+        await mongoose.connection.dropDatabase();
+        const hashed = await bcrypt.hash('Admin123!', 10);
+        await User.create({ email: 'admin@olympia.com', password: hashed, role: 'admin' });
+    });
+
     describe('POST /api/auth/login', () => {
         test('should login with valid credentials', async () => {
             const response = await request(app)

@@ -1,7 +1,9 @@
 const mongoose = require('mongoose');
 
 const sentimentSchema = new mongoose.Schema({
-    employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+    employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+    // Legacy compatibility
+    employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     month: { type: String, required: true }, // YYYY-MM
 
     attendance_score: Number,
@@ -43,6 +45,16 @@ const sentimentSchema = new mongoose.Schema({
 });
 
 // Index to ensure one sentiment record per employee per month
-sentimentSchema.index({ employee_id: 1, month: 1 }, { unique: true });
+sentimentSchema.pre('validate', function (next) {
+    if (this.employee && !this.employee_id) {
+        this.employee_id = this.employee;
+    }
+    if (this.employee_id && !this.employee) {
+        this.employee = this.employee_id;
+    }
+    next();
+});
+
+sentimentSchema.index({ employee: 1, month: 1 }, { unique: true });
 
 module.exports = mongoose.model('Sentiment', sentimentSchema);

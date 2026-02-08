@@ -6,6 +6,8 @@ const Payroll = require('../models/Payroll');
 const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 const Overtime = require('../models/Overtime');
+const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { authenticate, authorize } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
 const { generatePayrollPDF } = require('../utils/pdfGenerator');
@@ -25,7 +27,7 @@ const calculatePayroll = async (employee_id, month) => {
     const endDate = moment(month, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
 
     const attendanceRecords = await Attendance.find({
-        employee_id,
+        employee: employee_id,
         date: { $gte: startDate, $lte: endDate }
     });
 
@@ -226,7 +228,7 @@ router.post('/generate', authenticate, authorize('admin'), auditLogger('Generate
             const employee_id = employee._id;
 
             // Check if payroll already exists
-            const existingPayroll = await Payroll.findOne({ employee_id, month });
+            const existingPayroll = await Payroll.findOne({ employee: employee_id, month });
 
             if (existingPayroll) {
                 results.push({
@@ -240,6 +242,7 @@ router.post('/generate', authenticate, authorize('admin'), auditLogger('Generate
             const payrollData = await calculatePayroll(employee_id, month);
 
             const newPayroll = new Payroll({
+                employee: employee_id,
                 employee_id,
                 employee_name: `${employee.firstName} ${employee.lastName}`,
                 month,
@@ -251,6 +254,17 @@ router.post('/generate', authenticate, authorize('admin'), auditLogger('Generate
             });
 
             await newPayroll.save();
+
+            const user = await User.findOne({ $or: [{ employee: employee_id }, { employee_id }] }).select('_id');
+            if (user) {
+                await Notification.create({
+                    user: user._id,
+                    title: 'Bulletin de paie disponible',
+                    body: `Votre bulletin de paie pour ${month} est disponible.`,
+                    type: 'info',
+                    data: { payroll_id: newPayroll._id, month }
+                });
+            }
 
             results.push({
                 employee_id,
@@ -283,12 +297,9 @@ router.post('/generate', authenticate, authorize('admin'), auditLogger('Generate
  */
 router.get('/my', authenticate, async (req, res) => {
     try {
-        // Authenticated user ID is in req.user.uid
-        // We need to find the employee_id linked to this user or use it directly
-        // Assuming req.user contains the employee_id if it's an employee
         const employeeId = req.user.employee_id || req.user.user_id; // Using user_id as fallback but usually it's employee_id
 
-        const payrolls = await Payroll.find({ employee_id: employeeId })
+        const payrolls = await Payroll.find({ employee: employeeId })
             .sort({ month: -1 });
 
         res.json({
@@ -296,6 +307,9 @@ router.get('/my', authenticate, async (req, res) => {
             count: payrolls.length,
             payrolls: payrolls.map(p => ({
                 payroll_id: p._id,
+                base_salary: p.gross_salary,
+                bonuses_total: Object.values(p.bonuses || {}).reduce((a, b) => Number(a) + Number(b), 0),
+                deductions_total: Object.values(p.deductions || {}).reduce((a, b) => Number(a) + Number(b), 0),
                 ...p.toObject()
             }))
         });
@@ -320,7 +334,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
         const query = {};
 
         if (month) query.month = month;
-        if (employee_id) query.employee_id = employee_id;
+        if (employee_id) query.employee = employee_id;
 
         const payrolls = await Payroll.find(query).sort({ generated_at: -1 });
 
@@ -329,6 +343,9 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
             count: payrolls.length,
             payrolls: payrolls.map(p => ({
                 payroll_id: p._id,
+                base_salary: p.gross_salary,
+                bonuses_total: Object.values(p.bonuses || {}).reduce((a, b) => Number(a) + Number(b), 0),
+                deductions_total: Object.values(p.deductions || {}).reduce((a, b) => Number(a) + Number(b), 0),
                 ...p.toObject()
             }))
         });
@@ -404,6 +421,9 @@ router.get('/:id', authenticate, async (req, res) => {
             success: true,
             payroll: {
                 payroll_id: payroll._id,
+                base_salary: payroll.gross_salary,
+                bonuses_total: Object.values(payroll.bonuses || {}).reduce((a, b) => Number(a) + Number(b), 0),
+                deductions_total: Object.values(payroll.deductions || {}).reduce((a, b) => Number(a) + Number(b), 0),
                 ...payroll.toObject()
             }
         });
@@ -430,7 +450,7 @@ router.get('/:id/pdf', authenticate, async (req, res) => {
         }
         const payrollData = payrollDoc.toObject();
 
-        const employeeDoc = await Employee.findById(payrollData.employee_id);
+        const employeeDoc = await Employee.findById(payrollData.employee || payrollData.employee_id);
         if (!employeeDoc) {
             return res.status(404).json({ success: false, message: 'Employee not found' });
         }
@@ -508,7 +528,7 @@ router.post('/:id/send-email', authenticate, authorize('admin'), async (req, res
         }
         const payrollData = payrollDoc.toObject();
 
-        const employeeDoc = await Employee.findById(payrollData.employee_id);
+        const employeeDoc = await Employee.findById(payrollData.employee || payrollData.employee_id);
         if (!employeeDoc) {
             return res.status(404).json({ success: false, message: 'Employee not found' });
         }

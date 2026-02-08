@@ -32,9 +32,12 @@ const authenticate = async (req, res, next) => {
         }
 
         // Attach user to request
+        const employeeId = user.employee ? user.employee.toString() : (user.employee_id ? user.employee_id.toString() : null);
+
         req.user = {
+            ...user.toObject(),
             user_id: user._id.toString(),
-            ...user.toObject()
+            employee_id: employeeId
         };
 
         next();

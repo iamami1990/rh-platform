@@ -1,9 +1,11 @@
 const mongoose = require('mongoose');
 
 const attendanceSchema = new mongoose.Schema({
-    employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+    employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+    // Legacy compatibility
+    employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     date: { type: String, required: true }, // YYYY-MM-DD
-    check_in_time: { type: Date, required: true },
+    check_in_time: { type: Date },
     check_out_time: { type: Date },
     status: {
         type: String,
@@ -34,12 +36,26 @@ const attendanceSchema = new mongoose.Schema({
     justification_url: String,
 
     approved_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    approved_at: Date
+    approved_at: Date,
+    kiosk_log_id: { type: mongoose.Schema.Types.ObjectId, ref: 'KioskLog' }
 }, {
     timestamps: true
 });
 
+attendanceSchema.pre('validate', function (next) {
+    if (this.employee && !this.employee_id) {
+        this.employee_id = this.employee;
+    }
+    if (this.employee_id && !this.employee) {
+        this.employee = this.employee_id;
+    }
+    if ((this.status === 'present' || this.status === 'late') && !this.check_in_time) {
+        return next(new Error('check_in_time is required for present/late status'));
+    }
+    next();
+});
+
 // Index for quick lookup by employee and date
-attendanceSchema.index({ employee_id: 1, date: 1 }, { unique: true });
+attendanceSchema.index({ employee: 1, date: 1 }, { unique: true });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

@@ -4,10 +4,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
+const Employee = require('../models/Employee');
 const RefreshToken = require('../models/RefreshToken');
-// const Employee = require('../models/Employee'); // Will be enabled once Employee model is migrated
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
+const { authLimiter } = require('../middleware/rateLimiter');
 const { sendEmail } = require('../utils/emailService');
 
 // Helper to validate email format (basic)
@@ -18,7 +19,7 @@ const isValidEmail = (email) => /\S+@\S+\.\S+/.test(email);
  * @desc    Register new user (Admin only)
  * @access  Private (Admin)
  */
-router.post('/register', authenticate, auditLogger('User Registration'), async (req, res) => {
+router.post('/register', authenticate, authorize('admin', 'rh'), auditLogger('User Registration'), async (req, res) => {
     try {
         const { email, password, role, employee_id } = req.body;
 
@@ -40,6 +41,13 @@ router.post('/register', authenticate, auditLogger('User Registration'), async (
             return res.status(400).json({ success: false, message: 'Email already registered' });
         }
 
+        if (employee_id) {
+            const employee = await Employee.findById(employee_id);
+            if (!employee) {
+                return res.status(404).json({ success: false, message: 'Employee not found' });
+            }
+        }
+
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -48,6 +56,7 @@ router.post('/register', authenticate, auditLogger('User Registration'), async (
             email,
             password: hashedPassword,
             role,
+            employee: employee_id || null,
             employee_id: employee_id || null,
             created_at: new Date()
         });
@@ -60,7 +69,8 @@ router.post('/register', authenticate, auditLogger('User Registration'), async (
             user: {
                 user_id: newUser._id,
                 email: newUser.email,
-                role: newUser.role
+                role: newUser.role,
+                employee_id: newUser.employee ? newUser.employee.toString() : null
             }
         });
     } catch (error) {
@@ -78,7 +88,7 @@ router.post('/register', authenticate, auditLogger('User Registration'), async (
  * @desc    Login user and return JWT token
  * @access  Public
  */
-router.post('/login', auditLogger('User Login'), async (req, res) => {
+router.post('/login', authLimiter, auditLogger('User Login'), async (req, res) => {
     try {
         const { email, password } = req.body;
 
@@ -113,8 +123,10 @@ router.post('/login', auditLogger('User Login'), async (req, res) => {
         await user.save();
 
         // Generate JWT access token
+        const employeeId = user.employee ? user.employee.toString() : (user.employee_id ? user.employee_id.toString() : null);
+
         const token = jwt.sign(
-            { user_id: user._id, email: user.email, role: user.role, employee_id: user.employee_id },
+            { user_id: user._id, email: user.email, role: user.role, employee_id: employeeId },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRE || '24h' }
         );
@@ -138,7 +150,7 @@ router.post('/login', auditLogger('User Login'), async (req, res) => {
                 user_id: user._id,
                 email: user.email,
                 role: user.role,
-                employee_id: user.employee_id
+                employee_id: employeeId
             }
         });
     } catch (error) {
@@ -156,7 +168,7 @@ router.post('/login', auditLogger('User Login'), async (req, res) => {
  * @desc    Refresh JWT token using Refresh Token
  * @access  Public
  */
-router.post('/refresh-token', async (req, res) => {
+router.post('/refresh-token', authLimiter, async (req, res) => {
     try {
         const { refreshToken } = req.body;
 
@@ -185,8 +197,10 @@ router.post('/refresh-token', async (req, res) => {
         // Rotate Tokens (Delete old, create new)
         await RefreshToken.deleteOne({ _id: rtDoc._id });
 
+        const employeeId = user.employee ? user.employee.toString() : (user.employee_id ? user.employee_id.toString() : null);
+
         const newToken = jwt.sign(
-            { user_id: user._id, email: user.email, role: user.role, employee_id: user.employee_id },
+            { user_id: user._id, email: user.email, role: user.role, employee_id: employeeId },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRE || '24h' }
         );
@@ -245,9 +259,8 @@ router.get('/me', authenticate, async (req, res) => {
         let employeeData = null;
 
         if (req.user.employee_id) {
-            // Need to migrate Employee to Mongoose before this works fully
-            // const emp = await Employee.findById(req.user.employee_id);
-            // employeeData = emp;
+            const emp = await Employee.findById(req.user.employee_id);
+            employeeData = emp ? emp.toObject() : null;
         }
 
         res.json({
@@ -256,6 +269,7 @@ router.get('/me', authenticate, async (req, res) => {
                 user_id: req.user.user_id,
                 email: req.user.email,
                 role: req.user.role,
+                employee_id: req.user.employee_id || null,
                 employee: employeeData
             }
         });

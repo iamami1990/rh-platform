@@ -267,7 +267,7 @@ const OvertimePage = () => {
                         >
                             <MenuItem value="">Tous</MenuItem>
                             {employees.map(emp => (
-                                <MenuItem key={emp.employee_id} value={emp.employee_id}>
+                                <MenuItem key={emp._id || emp.employee_id} value={emp._id || emp.employee_id}>
                                     {emp.firstName} {emp.lastName}
                                 </MenuItem>
                             ))}
@@ -305,7 +305,7 @@ const OvertimePage = () => {
                         {overtimes.map((overtime) => (
                             <TableRow key={overtime.overtime_id}>
                                 <TableCell>{overtime.date}</TableCell>
-                                <TableCell>{employees.find(e => e.employee_id === overtime.employee_id)?.firstName || 'N/A'}</TableCell>
+                                <TableCell>{employees.find(e => (e._id || e.employee_id) === overtime.employee_id)?.firstName || 'N/A'}</TableCell>
                                 <TableCell>{overtime.hours}h</TableCell>
                                 <TableCell>
                                     <Chip label={overtime.rate_type} color={getRateColor(overtime.rate_type)} size="small" />
@@ -361,7 +361,7 @@ const OvertimePage = () => {
                                 required
                             >
                                 {employees.map(emp => (
-                                    <MenuItem key={emp.employee_id} value={emp.employee_id}>
+                                    <MenuItem key={emp._id || emp.employee_id} value={emp._id || emp.employee_id}>
                                         {emp.firstName} {emp.lastName}
                                     </MenuItem>
                                 ))}

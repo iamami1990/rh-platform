@@ -29,7 +29,7 @@ const AttendancePage = () => {
         try {
             setLoading(true);
             const today = format(new Date(), 'yyyy-MM-dd');
-            const response = await attendanceAPI.getAll({ date: today });
+            const response = await attendanceAPI.getAll({ startDate: today, endDate: today });
             const records = response.data.attendance || [];
 
             setAttendance(records);
@@ -153,7 +153,10 @@ const AttendancePage = () => {
                                                     {record.employee_name?.split(' ').map(n => n[0]).join('')}
                                                 </Avatar>
                                                 <Typography variant="body2" fontWeight="600">
-                                                    {record.employee_name || 'Collaborateur'}
+                                                    {record.employee_name ||
+                                                        (record.employee ? `${record.employee.firstName} ${record.employee.lastName}` : null) ||
+                                                        record.employee_id ||
+                                                        'Collaborateur'}
                                                 </Typography>
                                             </Box>
                                         </TableCell>

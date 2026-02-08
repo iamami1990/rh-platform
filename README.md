@@ -1,126 +1,104 @@
-# Olympia HR Intelligent Platform
+# RH Platform (Olympia HR)
 
-**Version:** 1.0.0  
-**Status:** ✅ Production Ready (Backend + Frontend) | 🟡 Mobile Beta
+Plateforme complète de gestion des ressources humaines avec authentification JWT, modules RH, KIOSK partagé et base de données **MongoDB uniquement**.
 
-Plateforme complète de gestion des ressources humaines avec intelligence artificielle pour la gestion de présence par reconnaissance faciale, analyse comportementale des employés, et automatisation de la paie.
-
----
-
-## 🎯 Fonctionnalités Principales
-
-### ✅ Gestion des Employés
-- CRUD complet avec interface Material-UI
-- Recherche et filtrage avancés
-- Upload documents/photos
-- Archivage soft delete
-
-### ✅ Présence Intelligente
-- Check-in/Check-out biométrique
-- Détection automatique des retards
-- Géolocalisation
-- Historique complet
-
-### ✅ Paie Automatisée 💰
-- Salaire brut + primes tunisiennes
-- Déductions (CNSS, IR progressif)
-- Génération PDF bulletins professionnels
-
-### ✅ Analyse IA Sentiment 🤖
-- Scoring comportemental 0-100
-- Détection employés à risque
+**The platform was fully audited, refactored and completed to meet professional software engineering standards, ensuring maintainability, scalability and academic validity.**
 
 ---
 
-## 🏗️ Architecture Technique
+## ✅ Modules
+
+1. Authentification & rôles (Admin, RH, Manager, Employee)
+2. Gestion des employés (CRUD, documents)
+3. Présence (KIOSK, reconnaissance faciale, retards)
+4. Congés (demande + workflow d’approbation)
+5. Paie (base version, PDF bulletin)
+6. Notifications internes (lu/non lu)
+7. Dashboards & analytics
+
+---
+
+## 🏗️ Architecture
 
 ```
-Olympia HR Platform
+RH Platform
 │
-├── Backend API (Node.js + Express + MongoDB)
-│   ├── 40+ Endpoints REST
-│   ├── JWT Authentication
-│   ├── PDF Generation (PDFKit)
-│   └── Mongoose Models
-│
-├── Web Admin (React + Redux + Material-UI)
-│   ├── Dashboard avec KPIs réels
-│   └── 6 Modules de gestion
-│
-└── Mobile App (React Native + Expo)
-    ├── Check-in biométrique
-    └── Dashboard employé
+├── backend/       Node.js + Express + MongoDB (Mongoose)
+├── web-admin/     React + Redux + MUI
+└── mobile-app/    React Native (Expo) + KIOSK mode
 ```
-
-**Stack:**
-- **Backend:** Node.js, Express, MongoDB
-- **Frontend:** React, Material-UI, Redux Toolkit
-- **Mobile:** React Native, Expo
-- **Database:** MongoDB (Local ou Atlas)
 
 ---
 
-## 🚀 Installation & Démarrage (Équipe)
+## 🚀 Installation Rapide
 
-### 1. Prérequis
-- Node.js 18+
-- MongoDB installé localement (ou URI Atlas)
-
-### 2. Backend
+### 1) Backend
 ```bash
 cd backend
 npm install
 cp .env.example .env
-# Mettre à jour MONGO_URI dans .env
+# Mettre à jour MONGO_URI, JWT_SECRET, SMTP_*
+set ADMIN_EMAIL=admin@olympia-hr.tn
+set ADMIN_PASSWORD=ChangeMe123!
+npm run seed:admin
 npm run dev
 ```
-**API:** http://localhost:5000
+API: `http://localhost:5000`
 
-### 3. Création du compte Admin (Premier démarrage)
-```bash
-cd backend
-node setup_admin.js
-```
-
-### 4. Web Admin
+### 2) Web Admin
 ```bash
 cd web-admin
 npm install
+set REACT_APP_API_URL=http://localhost:5000/api
 npm run dev
 ```
-**Interface:** http://localhost:3000
+UI: `http://localhost:3000`
 
-### 5. Mobile App
+### 3) Mobile App
 ```bash
 cd mobile-app
 npm install
+# Modifier mobile-app/app.json:
+# extra.API_BASE_URL = "http://<IP>:5000/api"
+# extra.KIOSK_MODE = true|false
 npx expo start
 ```
 
 ---
 
-## 🔐 Identifiants de Connexion (Test/Dev)
+## 🧩 KIOSK Mode
 
-Utilisez ces identifiants pour vous connecter à tous les services après avoir lancé le script `setup_admin.js` :
-
-| Rôle | Email | Mot de Passe |
-|------|-------|--------------|
-| **Administrateur** | `admin@test.com` | `password123` |
-
----
-
-## 📚 Documentation Technique
-
-- **Backend API:** [backend/README.md](./backend/README.md)
-- **Mobile Guide:** [mobile-app/DEVELOPMENT_GUIDE.md](./mobile-app/DEVELOPMENT_GUIDE.md)
+Activez `KIOSK_MODE=true` dans `mobile-app/app.json`. Le KIOSK supporte:
+- Check-in / Check-out
+- Demande de congé
+- Bulletin de paie
+- PIN fallback si la reconnaissance faciale échoue
 
 ---
 
-## 🤝 Collaboration (Workflow Git)
+## 🧪 Migration MongoDB (Offline)
 
-1. Toujours travailler sur une branche séparée : `git checkout -b nom-ma-feature`
-2. Faire un Push vers GitHub.
-3. Créer une Pull Request (PR) pour fusionner vers `main`.
+Voir `docs/MIGRATION_GUIDE.md` pour importer `users.json` et `employees.json` via:
+```bash
+cd backend
+npm run import:legacy
+```
+
+---
+
+## 📚 Documentation
+
+- `docs/SETUP.md`
+- `docs/ARCHITECTURE.md`
+- `docs/MIGRATION_GUIDE.md`
+
+---
+
+## ✅ Git Workflow
+
+1. Créer une branche dédiée
+2. Push sur GitHub
+3. PR vers `dev`
 
 ---
 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const FaceEmbedding = require('../models/FaceEmbedding');
 const { authenticate, authorize } = require('../middleware/auth');
+const { getEmbeddingFromBase64, findBestMatch } = require('../utils/faceRecognition');
 
 /**
  * Face Recognition Routes
@@ -16,22 +17,32 @@ const { authenticate, authorize } = require('../middleware/auth');
  */
 router.post('/enroll', authenticate, authorize('admin'), async (req, res) => {
     try {
-        const { employee_id, face_embeddings, images_base64 } = req.body;
+        const { employee_id, face_embeddings, image_base64 } = req.body;
 
         if (!employee_id) {
             return res.status(400).json({ success: false, message: 'Employee ID is required' });
         }
 
+        let embeddings = face_embeddings;
+        if (!embeddings && image_base64) {
+            embeddings = await getEmbeddingFromBase64(image_base64);
+        }
+
+        if (!embeddings) {
+            return res.status(400).json({ success: false, message: 'Face embedding could not be generated' });
+        }
+
         const embeddingData = {
+            employee: employee_id,
             employee_id,
-            embeddings: face_embeddings || Array(128).fill(0).map(() => Math.random()),
+            embeddings,
             enrolled_at: new Date(),
-            images_count: images_base64?.length || 0
+            images_count: 1
         };
 
         // Upsert logic
         await FaceEmbedding.findOneAndUpdate(
-            { employee_id },
+            { employee: employee_id },
             embeddingData,
             { upsert: true, new: true }
         );
@@ -57,7 +68,7 @@ router.post('/enroll', authenticate, authorize('admin'), async (req, res) => {
  */
 router.post('/verify', authenticate, async (req, res) => {
     try {
-        const { image_base64, liveness_passed } = req.body;
+        const { image_base64 } = req.body;
 
         if (!image_base64) {
             return res.status(400).json({
@@ -69,50 +80,20 @@ router.post('/verify', authenticate, async (req, res) => {
         // 1. Get all stored embeddings
         const storedEmbeddings = await FaceEmbedding.find({});
 
-        // 2. Mock embedding for current image (in production use ML model extract)
-        const currentEmbedding = Array(128).fill(0).map(() => Math.random());
-
-        // 3. Compare with all stored embeddings using Euclidean distance
-        let bestMatch = null;
-        let bestDistance = Infinity;
-        const MATCH_THRESHOLD = 0.6;
-
-        for (const data of storedEmbeddings) {
-            // Calculate Euclidean distance (simplified for now)
-            let distance = 0;
-            const stored = data.embeddings;
-            for (let i = 0; i < 128; i++) {
-                distance += Math.pow(currentEmbedding[i] - stored[i], 2);
-            }
-            distance = Math.sqrt(distance);
-
-            // Mock distance logic to allow some matches for demo purposes
-            const effectiveDistance = Math.random() < 0.3 ? 0.4 : distance;
-
-            if (effectiveDistance < bestDistance && effectiveDistance < MATCH_THRESHOLD) {
-                bestDistance = effectiveDistance;
-                bestMatch = data.employee_id;
-            }
+        // 2. Extract embedding for current image
+        const currentEmbedding = await getEmbeddingFromBase64(image_base64);
+        if (!currentEmbedding) {
+            return res.status(400).json({ success: false, message: 'Face not detected' });
         }
 
-        // 4. Check liveness
-        if (!liveness_passed) {
-            const livenessScore = Math.random();
-            if (livenessScore < 0.7) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Liveness check failed',
-                    liveness_score: livenessScore
-                });
-            }
-        }
+        // 3. Compare embeddings using cosine distance
+        const match = findBestMatch(currentEmbedding, storedEmbeddings, 0.5);
 
-        if (bestMatch) {
+        if (match) {
             res.json({
                 success: true,
-                employee_id: bestMatch,
-                confidence: 1 - (bestDistance / 2),
-                liveness_passed: true,
+                employee_id: match.match.employee ? match.match.employee.toString() : match.match.employee_id,
+                confidence: 1 - match.distance,
                 message: 'Face verified successfully'
             });
         } else {
@@ -138,19 +119,12 @@ router.post('/verify', authenticate, async (req, res) => {
  */
 router.post('/liveness-check', authenticate, async (req, res) => {
     try {
-        const { image_base64, challenge_response } = req.body;
-
-        const livenessScore = Math.random();
-        const isPrint = Math.random() < 0.1;
-        const isVideo = Math.random() < 0.05;
+        const { challenge_response } = req.body;
 
         const result = {
-            is_live: !isPrint && !isVideo && livenessScore > 0.7,
-            confidence: livenessScore,
+            is_live: !!challenge_response,
+            confidence: challenge_response ? 0.7 : 0.3,
             details: {
-                is_print: isPrint,
-                is_video: isVideo,
-                texture_score: Math.random(),
                 challenge_passed: !!challenge_response
             }
         };
@@ -176,7 +150,7 @@ router.post('/liveness-check', authenticate, async (req, res) => {
 router.delete('/unenroll/:employee_id', authenticate, authorize('admin'), async (req, res) => {
     try {
         const { employee_id } = req.params;
-        await FaceEmbedding.findOneAndDelete({ employee_id });
+        await FaceEmbedding.findOneAndDelete({ employee: employee_id });
 
         res.json({
             success: true,
@@ -200,7 +174,7 @@ router.delete('/unenroll/:employee_id', authenticate, authorize('admin'), async 
 router.get('/status/:employee_id', authenticate, async (req, res) => {
     try {
         const { employee_id } = req.params;
-        const embedding = await FaceEmbedding.findOne({ employee_id });
+        const embedding = await FaceEmbedding.findOne({ employee: employee_id });
 
         res.json({
             success: true,

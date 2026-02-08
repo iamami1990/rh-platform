@@ -1,7 +1,9 @@
 const mongoose = require('mongoose');
 
 const leaveSchema = new mongoose.Schema({
-    employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+    employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+    // Legacy compatibility
+    employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     leave_type: {
         type: String,
         required: true,
@@ -29,6 +31,16 @@ const leaveSchema = new mongoose.Schema({
     emergency: { type: Boolean, default: false }
 }, {
     timestamps: true
+});
+
+leaveSchema.pre('validate', function (next) {
+    if (this.employee && !this.employee_id) {
+        this.employee_id = this.employee;
+    }
+    if (this.employee_id && !this.employee) {
+        this.employee = this.employee_id;
+    }
+    next();
 });
 
 module.exports = mongoose.model('Leave', leaveSchema);

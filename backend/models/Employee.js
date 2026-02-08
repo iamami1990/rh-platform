@@ -69,7 +69,9 @@ const employeeSchema = new mongoose.Schema({
     },
 
     // Relations & Docs
-    manager_id: { type: String, ref: 'User' }, // Or ObjectId if we migrate everything, but assume String for now
+    manager: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // Legacy compatibility
+    manager_id: { type: String, ref: 'User' },
     documents: [documentSchema],
     profile_image_url: String,
 
@@ -87,6 +89,9 @@ const employeeSchema = new mongoose.Schema({
 employeeSchema.pre('save', async function () {
     if (this.salary_brut && !this.gross_salary) {
         this.gross_salary = this.salary_brut;
+    }
+    if (this.manager && !this.manager_id) {
+        this.manager_id = this.manager.toString();
     }
 });
 

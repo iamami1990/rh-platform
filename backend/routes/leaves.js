@@ -2,30 +2,34 @@ const express = require('express');
 const router = express.Router();
 const moment = require('moment');
 const Leave = require('../models/Leave');
-const Employee = require('../models/Employee');
+const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { authenticate, authorize } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
-const { uploadToStorage } = require('../utils/fileUpload');
-const multer = require('multer');
-
-const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 }
-});
+const { uploadSingle } = require('../middleware/upload');
 
 /**
  * @route   POST /api/leaves
  * @desc    Create leave request with optional justification upload
  * @access  Private (Employee)
  */
-router.post('/', authenticate, upload.single('justification'), auditLogger('Submit Leave Request'), async (req, res) => {
+router.post('/', authenticate, uploadSingle('justification'), auditLogger('Submit Leave Request'), async (req, res) => {
     try {
         const { employee_id, leave_type, start_date, end_date, reason } = req.body;
+        const targetEmployeeId = req.user.role === 'employee' ? req.user.employee_id : (employee_id || req.user.employee_id);
+
+        if (!targetEmployeeId) {
+            return res.status(400).json({ success: false, message: 'Employee ID is required' });
+        }
+
+        if (req.user.role === 'employee' && employee_id && employee_id !== req.user.employee_id) {
+            return res.status(403).json({ success: false, message: 'Access denied' });
+        }
 
         // Handle file upload if present
         let document_url = req.body.document_url || null;
-        if (req.file) {
-            document_url = await uploadToStorage(req.file, `leaves/${employee_id}`);
+        if (req.file && req.fileUrl) {
+            document_url = req.fileUrl;
         }
 
         // Calculate days requested
@@ -34,7 +38,8 @@ router.post('/', authenticate, upload.single('justification'), auditLogger('Subm
         const days_requested = end.diff(start, 'days') + 1;
 
         const newLeave = new Leave({
-            employee_id,
+            employee: targetEmployeeId,
+            employee_id: targetEmployeeId,
             leave_type, // 'annual', 'sick', 'maternity', 'unpaid'
             start_date,
             end_date,
@@ -71,14 +76,14 @@ router.post('/', authenticate, upload.single('justification'), auditLogger('Subm
  * @desc    Get all leave requests
  * @access  Private (Admin, Manager)
  */
-router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) => {
+router.get('/', authenticate, authorize('admin', 'manager', 'rh'), async (req, res) => {
     try {
         const { status, employee_id } = req.query;
 
         const query = {};
 
         if (status) query.status = status;
-        if (employee_id) query.employee_id = employee_id;
+        if (employee_id) query.employee = employee_id;
 
         const leaves = await Leave.find(query).sort({ created_at: -1 });
 
@@ -105,20 +110,20 @@ router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) =>
  * @desc    Get all approved leaves for calendar view
  * @access  Private (Admin, Manager)
  */
-router.get('/calendar', authenticate, authorize('admin', 'manager'), async (req, res) => {
+router.get('/calendar', authenticate, authorize('admin', 'manager', 'rh'), async (req, res) => {
     try {
-        const leaves = await Leave.find({ status: 'approved' }).populate('employee_id', 'firstName lastName');
+        const leaves = await Leave.find({ status: 'approved' }).populate('employee', 'firstName lastName');
 
         const events = leaves.map(l => ({
             id: l._id,
-            title: `${l.employee_id ? (l.employee_id.firstName + ' ' + l.employee_id.lastName) : 'Unknown'} - ${l.leave_type}`,
+            title: `${l.employee ? (l.employee.firstName + ' ' + l.employee.lastName) : 'Unknown'} - ${l.leave_type}`,
             start: l.start_date,
             end: l.end_date,
             color: l.leave_type === 'annual' ? '#4caf50' :
                 l.leave_type === 'sick' ? '#f44336' :
                     l.leave_type === 'maternity' ? '#e91e63' : '#9c27b0',
             extendedProps: {
-                employee_id: l.employee_id?._id,
+                employee_id: l.employee?._id,
                 leave_type: l.leave_type,
                 reason: l.reason
             }
@@ -138,7 +143,7 @@ router.get('/calendar', authenticate, authorize('admin', 'manager'), async (req,
  * @desc    Approve leave request
  * @access  Private (Admin, Manager)
  */
-router.put('/:id/approve', authenticate, authorize('admin', 'manager'), async (req, res) => {
+router.put('/:id/approve', authenticate, authorize('admin', 'manager', 'rh'), async (req, res) => {
     try {
         const leave = await Leave.findByIdAndUpdate(
             req.params.id,
@@ -152,6 +157,17 @@ router.put('/:id/approve', authenticate, authorize('admin', 'manager'), async (r
 
         if (!leave) {
             return res.status(404).json({ success: false, message: 'Leave request not found' });
+        }
+
+        const user = await User.findOne({ $or: [{ employee: leave.employee }, { employee_id: leave.employee }] }).select('_id');
+        if (user) {
+            await Notification.create({
+                user: user._id,
+                title: 'Demande de conge approuvee',
+                body: `Votre demande de conge du ${leave.start_date} au ${leave.end_date} a ete approuvee.`,
+                type: 'success',
+                data: { leave_id: leave._id }
+            });
         }
 
         res.json({
@@ -172,7 +188,7 @@ router.put('/:id/approve', authenticate, authorize('admin', 'manager'), async (r
  * @desc    Reject leave request
  * @access  Private (Admin, Manager)
  */
-router.put('/:id/reject', authenticate, authorize('admin', 'manager'), async (req, res) => {
+router.put('/:id/reject', authenticate, authorize('admin', 'manager', 'rh'), async (req, res) => {
     try {
         const leave = await Leave.findByIdAndUpdate(
             req.params.id,
@@ -186,6 +202,17 @@ router.put('/:id/reject', authenticate, authorize('admin', 'manager'), async (re
 
         if (!leave) {
             return res.status(404).json({ success: false, message: 'Leave request not found' });
+        }
+
+        const user = await User.findOne({ $or: [{ employee: leave.employee }, { employee_id: leave.employee }] }).select('_id');
+        if (user) {
+            await Notification.create({
+                user: user._id,
+                title: 'Demande de conge refusee',
+                body: `Votre demande de conge du ${leave.start_date} au ${leave.end_date} a ete refusee.`,
+                type: 'warning',
+                data: { leave_id: leave._id }
+            });
         }
 
         res.json({
@@ -210,9 +237,13 @@ router.get('/balance/:employee_id', authenticate, async (req, res) => {
     try {
         const currentYear = moment().year();
 
+        if (req.user.role === 'employee' && req.params.employee_id !== req.user.employee_id) {
+            return res.status(403).json({ success: false, message: 'Access denied' });
+        }
+
         // Get approved leaves for current year
         const leaves = await Leave.find({
-            employee_id: req.params.employee_id,
+            employee: req.params.employee_id,
             status: 'approved'
         });
 

@@ -1,182 +1,114 @@
 const express = require('express');
 const router = express.Router();
-const DeviceToken = require('../models/DeviceToken');
+const Notification = require('../models/Notification');
 const { authenticate, authorize } = require('../middleware/auth');
 
 /**
- * Push Notification Routes
- * 
- * NOTE: Firebase Cloud Messaging (FCM) has been removed.
- * This service now persists notifications to MongoDB and mocks the "Push" delivery.
- * For real push notifications, integrate OneSignal, Expo, or a specialized service.
+ * In-app Notification Routes (MongoDB)
  */
 
 /**
- * @route   POST /api/notifications/register-device
- * @desc    Register device for push notifications
+ * @route   GET /api/notifications
+ * @desc    Get notifications for current user (or specific user if admin/rh/manager)
  * @access  Private
  */
-router.post('/register-device', authenticate, async (req, res) => {
+router.get('/', authenticate, async (req, res) => {
     try {
-        const { user_id, fcm_token, platform, device_info } = req.body;
+        const { user_id } = req.query;
+        let targetUserId = req.user.user_id;
 
-        if (!fcm_token) {
-            return res.status(400).json({
-                success: false,
-                message: 'FCM token is required'
-            });
+        if (user_id && ['admin', 'manager', 'rh'].includes(req.user.role)) {
+            targetUserId = user_id;
         }
 
-        const deviceData = {
-            user_id: user_id || req.user.user_id,
-            fcm_token,
-            platform,
-            device_info,
-            last_active: new Date()
-        };
-
-        // Upsert device token
-        await DeviceToken.findOneAndUpdate(
-            { fcm_token },
-            deviceData,
-            { upsert: true, new: true }
-        );
+        const notifications = await Notification.find({ user: targetUserId })
+            .sort({ createdAt: -1 })
+            .limit(200);
 
         res.json({
             success: true,
-            message: 'Device registered for notifications'
+            count: notifications.length,
+            notifications: notifications.map(n => ({
+                notification_id: n._id,
+                ...n.toObject()
+            }))
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Device registration failed',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Failed to fetch notifications', error: error.message });
     }
 });
 
 /**
- * @route   POST /api/notifications/unregister-device
- * @desc    Unregister device
+ * @route   PUT /api/notifications/:id/read
+ * @desc    Mark notification as read
  * @access  Private
  */
-router.post('/unregister-device', authenticate, async (req, res) => {
+router.put('/:id/read', authenticate, async (req, res) => {
     try {
-        const { fcm_token } = req.body;
+        const notification = await Notification.findById(req.params.id);
+        if (!notification) {
+            return res.status(404).json({ success: false, message: 'Notification not found' });
+        }
 
-        await DeviceToken.findOneAndDelete({ fcm_token });
+        if (notification.user.toString() !== req.user.user_id && !['admin', 'manager', 'rh'].includes(req.user.role)) {
+            return res.status(403).json({ success: false, message: 'Access denied' });
+        }
 
-        res.json({
-            success: true,
-            message: 'Device unregistered'
-        });
+        notification.read = true;
+        await notification.save();
+
+        res.json({ success: true, message: 'Notification marked as read' });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Device unregistration failed',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Failed to update notification', error: error.message });
+    }
+});
+
+/**
+ * @route   PUT /api/notifications/read-all
+ * @desc    Mark all notifications as read for current user
+ * @access  Private
+ */
+router.put('/read-all', authenticate, async (req, res) => {
+    try {
+        await Notification.updateMany(
+            { user: req.user.user_id, read: false },
+            { $set: { read: true } }
+        );
+
+        res.json({ success: true, message: 'All notifications marked as read' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to update notifications', error: error.message });
     }
 });
 
 /**
  * @route   POST /api/notifications/send
- * @desc    Send push notification to specific user
- * @access  Admin/Manager
+ * @desc    Create a notification for a specific user
+ * @access  Admin/Manager/RH
  */
-router.post('/send', authenticate, authorize('admin', 'manager'), async (req, res) => {
+router.post('/send', authenticate, authorize('admin', 'manager', 'rh'), async (req, res) => {
     try {
-        const { user_id, title, body, data } = req.body;
-
-        // Get user's device tokens
-        const devices = await DeviceToken.find({ user_id });
-
-        if (devices.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'No devices found for user'
-            });
+        const { user_id, title, body, type = 'info', data } = req.body;
+        if (!user_id || !title || !body) {
+            return res.status(400).json({ success: false, message: 'user_id, title, and body are required' });
         }
 
-        const tokens = devices.map(d => d.fcm_token);
-
-        // MOCK SEND
-        console.log(`[PUSH MOCK] Sending to ${tokens.length} devices for user ${user_id}`);
-        console.log(`[PUSH MOCK] Title: ${title}, Body: ${body}`);
+        const notification = await Notification.create({
+            user: user_id,
+            title,
+            body,
+            type,
+            data: data || null
+        });
 
         res.json({
             success: true,
-            message: `Notification sent to ${tokens.length} device(s) (MOCKED)`,
-            results: {
-                success: tokens.length,
-                failure: 0
-            }
+            message: 'Notification created',
+            notification_id: notification._id
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to send notification',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Failed to create notification', error: error.message });
     }
 });
-
-/**
- * @route   POST /api/notifications/send-to-topic
- * @desc    Send notification to topic subscribers
- * @access  Admin
- */
-router.post('/send-to-topic', authenticate, authorize('admin'), async (req, res) => {
-    try {
-        const { topic, title, body, data } = req.body;
-
-        // MOCK SEND
-        console.log(`[PUSH MOCK] Sending to topic: ${topic}`);
-        console.log(`[PUSH MOCK] Title: ${title}, Body: ${body}`);
-
-        res.json({
-            success: true,
-            message: `Notification sent to topic: ${topic} (MOCKED)`
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to send notification',
-            error: error.message
-        });
-    }
-});
-
-/**
- * Helper: Send notification when payroll is generated
- */
-const sendPayrollNotification = async (employee_id, payrollData) => {
-    try {
-        // Here we could Create a Notification document too, so it appears in the in-app list
-        // For now, verified devices exist and log
-        const devices = await DeviceToken.find({ user_id: employee_id });
-        if (devices.length === 0) return;
-
-        console.log(`[PUSH MOCK] Payroll Notification for ${employee_id}`);
-    } catch (error) {
-        console.error('Error sending payroll notification:', error);
-    }
-};
-
-/**
- * Helper: Send notification when leave is approved/rejected
- */
-const sendLeaveDecisionNotification = async (employee_id, leaveData, approved) => {
-    try {
-        const devices = await DeviceToken.find({ user_id: employee_id });
-        if (devices.length === 0) return;
-
-        console.log(`[PUSH MOCK] Leave Notification (${approved ? 'Approved' : 'Rejected'}) for ${employee_id}`);
-    } catch (error) {
-        console.error('Error sending leave notification:', error);
-    }
-};
 
 module.exports = router;
-module.exports.sendPayrollNotification = sendPayrollNotification;
-module.exports.sendLeaveDecisionNotification = sendLeaveDecisionNotification;

@@ -55,7 +55,7 @@ router.get('/cnss/:month', authenticate, authorize('admin'), auditLogger('Genera
 
         // Add data
         for (const payroll of payrolls) {
-            const employee = await Employee.findById(payroll.employee_id);
+            const employee = await Employee.findById(payroll.employee || payroll.employee_id);
             const employeeData = employee ? employee.toObject() : {};
 
             const employerCNSS = Number(payroll.total_gross || 0) * 0.1657;
@@ -119,7 +119,7 @@ router.get('/ir-annual/:year', authenticate, authorize('admin'), auditLogger('Ge
         // Group by employee
         const employeeIRMap = {};
         payrolls.forEach(p => {
-            const empId = p.employee_id.toString();
+            const empId = (p.employee || p.employee_id).toString();
             if (!employeeIRMap[empId]) {
                 employeeIRMap[empId] = {
                     employee_name: p.employee_name,

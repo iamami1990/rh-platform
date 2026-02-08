@@ -5,8 +5,6 @@ const Overtime = require('../models/Overtime');
 const Employee = require('../models/Employee');
 const { authenticate, authorize } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
-// const { validateCreateOvertime, validateApproveOvertime, validateRejectOvertime } = require('../models'); 
-// NOTE: Validation is now implicit or can be re-added, but for now we trust the schema validation of Mongoose + simple manual checks
 
 /**
  * @route   POST /api/overtime
@@ -92,7 +90,7 @@ router.post('/', authenticate, auditLogger('Create Overtime Request'), async (re
  * @desc    Get all overtime requests with filters
  * @access  Private (Admin, Manager)
  */
-router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) => {
+router.get('/', authenticate, authorize('admin', 'manager', 'rh'), async (req, res) => {
     try {
         const { employee_id, month, status } = req.query;
 
@@ -196,7 +194,7 @@ router.get('/:id', authenticate, async (req, res) => {
  * @desc    Approve overtime request
  * @access  Private (Manager, Admin)
  */
-router.put('/:id/approve', authenticate, authorize('admin', 'manager'), auditLogger('Approve Overtime'), async (req, res) => {
+router.put('/:id/approve', authenticate, authorize('admin', 'manager', 'rh'), auditLogger('Approve Overtime'), async (req, res) => {
     try {
         const { manager_comments } = req.body;
         const overtime = await Overtime.findById(req.params.id);
@@ -241,7 +239,7 @@ router.put('/:id/approve', authenticate, authorize('admin', 'manager'), auditLog
  * @desc    Reject overtime request
  * @access  Private (Manager, Admin)
  */
-router.put('/:id/reject', authenticate, authorize('admin', 'manager'), auditLogger('Reject Overtime'), async (req, res) => {
+router.put('/:id/reject', authenticate, authorize('admin', 'manager', 'rh'), auditLogger('Reject Overtime'), async (req, res) => {
     try {
         const { rejection_reason, manager_comments } = req.body;
         const overtime = await Overtime.findById(req.params.id);

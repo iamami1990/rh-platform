@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-// const { v4: uuidv4 } = require('uuid');
 const moment = require('moment');
 const Attendance = require('../models/Attendance');
 const Employee = require('../models/Employee');
@@ -14,13 +13,18 @@ const { authenticate, authorize } = require('../middleware/auth');
 router.post('/check-in', authenticate, async (req, res) => {
     try {
         const { employee_id, face_image_url, location, device_info } = req.body;
+        const targetEmployeeId = req.user.role === 'employee' ? req.user.employee_id : (employee_id || req.user.employee_id);
+
+        if (!targetEmployeeId) {
+            return res.status(400).json({ success: false, message: 'Employee ID is required' });
+        }
 
         const today = moment().format('YYYY-MM-DD');
         const now = new Date();
 
         // Check if already checked in today
         const existingAttendance = await Attendance.findOne({
-            employee_id,
+            employee: targetEmployeeId,
             date: today
         });
 
@@ -32,7 +36,7 @@ router.post('/check-in', authenticate, async (req, res) => {
         }
 
         // Get employee data
-        const employee = await Employee.findById(employee_id);
+        const employee = await Employee.findById(targetEmployeeId);
         if (!employee) {
             return res.status(404).json({ success: false, message: 'Employee not found' });
         }
@@ -76,14 +80,23 @@ router.post('/check-in', authenticate, async (req, res) => {
         const status = delayMinutes > 0 ? 'late' : 'present';
 
         // Create attendance record
+        const normalizedLocation = typeof location === 'string'
+            ? { address: location }
+            : (location || null);
+
+        const normalizedDeviceInfo = typeof device_info === 'string'
+            ? { device_name: device_info }
+            : (device_info || null);
+
         const newAttendance = new Attendance({
-            employee_id,
+            employee: targetEmployeeId,
+            employee_id: targetEmployeeId,
             date: today,
             check_in_time: now,
             check_out_time: null,
             face_image_url: face_image_url || null,
-            location: location || null,
-            device_info: device_info || null,
+            location: normalizedLocation,
+            device_info: normalizedDeviceInfo,
             status,
             delay_minutes: delayMinutes,
             notes: ''
@@ -117,11 +130,16 @@ router.post('/check-in', authenticate, async (req, res) => {
 router.post('/check-out', authenticate, async (req, res) => {
     try {
         const { employee_id } = req.body;
+        const targetEmployeeId = req.user.role === 'employee' ? req.user.employee_id : (employee_id || req.user.employee_id);
+
+        if (!targetEmployeeId) {
+            return res.status(400).json({ success: false, message: 'Employee ID is required' });
+        }
         const today = moment().format('YYYY-MM-DD');
 
         // Find today's attendance record
         const attendance = await Attendance.findOne({
-            employee_id,
+            employee: targetEmployeeId,
             date: today
         });
 
@@ -161,29 +179,32 @@ router.post('/check-out', authenticate, async (req, res) => {
  * @desc    Get all attendance records
  * @access  Private (Admin, Manager)
  */
-router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) => {
+router.get('/', authenticate, authorize('admin', 'manager', 'rh'), async (req, res) => {
     try {
-        const { startDate, endDate, employee_id, status } = req.query;
+        const { startDate, endDate, employee_id, status, date } = req.query;
 
         const query = {};
 
         // Apply filters
-        if (employee_id) query.employee_id = employee_id;
+        if (employee_id) query.employee = employee_id;
         if (status) query.status = status;
 
-        if (startDate || endDate) {
+        if (date) {
+            query.date = date;
+        } else if (startDate || endDate) {
             query.date = {};
             if (startDate) query.date.$gte = startDate;
             if (endDate) query.date.$lte = endDate;
         }
 
-        const records = await Attendance.find(query).sort({ created_at: -1 });
+        const records = await Attendance.find(query).populate('employee', 'firstName lastName').sort({ created_at: -1 });
 
         res.json({
             success: true,
             count: records.length,
             attendance: records.map(r => ({
                 attendance_id: r._id,
+                employee_name: r.employee ? `${r.employee.firstName} ${r.employee.lastName}` : undefined,
                 ...r.toObject()
             }))
         });
@@ -204,7 +225,11 @@ router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) =>
  */
 router.get('/employee/:id', authenticate, async (req, res) => {
     try {
-        const records = await Attendance.find({ employee_id: req.params.id })
+        if (req.user.role === 'employee' && req.params.id !== req.user.employee_id) {
+            return res.status(403).json({ success: false, message: 'Access denied' });
+        }
+
+        const records = await Attendance.find({ employee: req.params.id })
             .sort({ created_at: -1 })
             .limit(30);
 

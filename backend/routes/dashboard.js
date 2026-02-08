@@ -7,6 +7,7 @@ const Leave = require('../models/Leave');
 const Payroll = require('../models/Payroll');
 const Sentiment = require('../models/Sentiment');
 const { authenticate, authorize } = require('../middleware/auth');
+const { ensureAbsencesUpToDate } = require('../utils/absenceService');
 
 /**
  * @route   GET /api/dashboard/admin
@@ -15,6 +16,7 @@ const { authenticate, authorize } = require('../middleware/auth');
  */
 router.get('/admin', authenticate, authorize('admin'), async (req, res) => {
     try {
+        await ensureAbsencesUpToDate(1);
         const today = moment().format('YYYY-MM-DD');
         const currentMonth = moment().format('YYYY-MM');
 
@@ -92,9 +94,6 @@ router.get('/admin', authenticate, authorize('admin'), async (req, res) => {
  */
 router.get('/manager', authenticate, authorize('manager'), async (req, res) => {
     try {
-        // TODO: Filter by manager's team (requires manager_id relationship)
-        // For now, return similar to admin but could be filtered
-
         res.json({
             success: true,
             message: 'Manager dashboard - to be implemented with team filtering',
@@ -129,11 +128,11 @@ router.get('/employee', authenticate, async (req, res) => {
         const currentMonth = moment().format('YYYY-MM');
 
         // Latest payroll
-        const payroll = await Payroll.findOne({ employee_id }).sort({ generated_at: -1 });
+        const payroll = await Payroll.findOne({ employee: employee_id }).sort({ generated_at: -1 });
 
         // Leave balance
         const approvedLeaves = await Leave.find({
-            employee_id,
+            employee: employee_id,
             status: 'approved',
             leave_type: 'annual'
         });
@@ -151,7 +150,7 @@ router.get('/employee', authenticate, async (req, res) => {
         const endDate = moment(currentMonth, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
 
         const monthAttendance = await Attendance.find({
-            employee_id,
+            employee: employee_id,
             date: { $gte: startDate, $lte: endDate }
         });
 
@@ -159,7 +158,7 @@ router.get('/employee', authenticate, async (req, res) => {
         const lateDays = monthAttendance.filter(r => r.status === 'late').length;
 
         // Latest sentiment
-        const sentiment = await Sentiment.findOne({ employee_id }).sort({ created_at: -1 });
+        const sentiment = await Sentiment.findOne({ employee: employee_id }).sort({ created_at: -1 });
 
         res.json({
             success: true,

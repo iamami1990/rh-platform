@@ -78,7 +78,5 @@ const uploadMultiple = (fieldName, maxCount = 5) => {
 
 module.exports = {
     uploadSingle,
-    uploadMultiple,
-    // Legacy support (no-op or simple delete)
-    deleteFromFirebase: async () => true
+    uploadMultiple
 };

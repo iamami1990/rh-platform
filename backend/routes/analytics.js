@@ -8,9 +8,6 @@ const Sentiment = require('../models/Sentiment');
 const Payroll = require('../models/Payroll');
 const { authenticate, authorize } = require('../middleware/auth');
 
-/**
- * HACK: In-memory helper functions (copied from previous logic but adapted for standard JS objects)
- */
 function getWeekKey(date) {
     const d = new Date(date);
     const startOfYear = new Date(d.getFullYear(), 0, 1);
@@ -72,7 +69,7 @@ function analyzeBehavioralPatterns(attendanceData) {
     const employeePatterns = {};
 
     attendanceData.forEach(record => {
-        const empId = record.employee_id.toString();
+        const empId = (record.employee || record.employee_id).toString();
         if (!employeePatterns[empId]) {
             employeePatterns[empId] = {
                 total_days: 0,
@@ -352,10 +349,10 @@ router.get('/employee-insights/:employee_id', authenticate, authorize('admin', '
         // Gather all data
         const [employee, attendance, leaves, sentiment, payroll] = await Promise.all([
             Employee.findById(employee_id),
-            Attendance.find({ employee_id }).sort({ date: -1 }).limit(90),
-            Leave.find({ employee_id }).sort({ created_at: -1 }),
-            Sentiment.find({ employee_id }).sort({ month: -1 }).limit(6),
-            Payroll.find({ employee_id }).sort({ month: -1 }).limit(12)
+            Attendance.find({ employee: employee_id }).sort({ date: -1 }).limit(90),
+            Leave.find({ employee: employee_id }).sort({ created_at: -1 }),
+            Sentiment.find({ employee: employee_id }).sort({ month: -1 }).limit(6),
+            Payroll.find({ employee: employee_id }).sort({ month: -1 }).limit(12)
         ]);
 
         if (!employee) {

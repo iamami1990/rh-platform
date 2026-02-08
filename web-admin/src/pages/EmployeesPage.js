@@ -140,7 +140,7 @@ const EmployeesPage = () => {
         e.preventDefault();
         try {
             if (editMode) {
-                await employeesAPI.update(selectedEmployee.employee_id || selectedEmployee.id, formData);
+                await employeesAPI.update(selectedEmployee._id || selectedEmployee.employee_id || selectedEmployee.id, formData);
             } else {
                 await employeesAPI.create(formData);
             }
@@ -304,7 +304,7 @@ const EmployeesPage = () => {
                                 </TableRow>
                             ) : (
                                 filteredEmployees.map((emp) => (
-                                    <TableRow key={emp.employee_id || emp.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                    <TableRow key={emp._id || emp.employee_id || emp.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                                         <TableCell>
                                             <Box display="flex" alignItems="center" gap={2}>
                                                 <Avatar sx={{ bgcolor: 'primary.light', fontWeight: 700 }}>
@@ -366,7 +366,7 @@ const EmployeesPage = () => {
                                                     <input
                                                         type="file"
                                                         hidden
-                                                        onChange={(e) => handleDocumentUpload(emp.employee_id || emp.id, e.target.files[0])}
+                                                        onChange={(e) => handleDocumentUpload(emp._id || emp.employee_id || emp.id, e.target.files[0])}
                                                     />
                                                 </IconButton>
                                             </Tooltip>
@@ -376,7 +376,7 @@ const EmployeesPage = () => {
                                                 </IconButton>
                                             </Tooltip>
                                             <Tooltip title="Supprimer">
-                                                <IconButton color="error" onClick={() => handleDelete(emp.employee_id || emp.id)} sx={{ bgcolor: 'rgba(239, 68, 68, 0.08)' }}>
+                                                <IconButton color="error" onClick={() => handleDelete(emp._id || emp.employee_id || emp.id)} sx={{ bgcolor: 'rgba(239, 68, 68, 0.08)' }}>
                                                     <Delete fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>

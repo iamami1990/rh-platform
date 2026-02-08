@@ -40,6 +40,22 @@ const PayrollScreen = () => {
         return <LoadingSpinner />;
     }
 
+    const getBonusesTotal = (payroll) => {
+        if (typeof payroll?.bonuses_total === 'number') return payroll.bonuses_total;
+        if (payroll?.bonuses && typeof payroll.bonuses === 'object') {
+            return Object.values(payroll.bonuses).reduce((sum, v) => sum + Number(v || 0), 0);
+        }
+        return 0;
+    };
+
+    const getDeductionsTotal = (payroll) => {
+        if (typeof payroll?.deductions_total === 'number') return payroll.deductions_total;
+        if (payroll?.deductions && typeof payroll.deductions === 'object') {
+            return Object.values(payroll.deductions).reduce((sum, v) => sum + Number(v || 0), 0);
+        }
+        return 0;
+    };
+
     if (selectedPayroll) {
         return (
             <SafeAreaView style={styles.container}>
@@ -58,21 +74,21 @@ const PayrollScreen = () => {
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Salaire de base:</Text>
                             <Text style={styles.detailValue}>
-                                {formatCurrency(selectedPayroll.base_salary)}
-                            </Text>
+                            {formatCurrency(selectedPayroll.base_salary || selectedPayroll.gross_salary)}
+                        </Text>
                         </View>
 
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Primes:</Text>
                             <Text style={styles.detailValue}>
-                                {formatCurrency(selectedPayroll.bonuses || 0)}
+                                {formatCurrency(getBonusesTotal(selectedPayroll))}
                             </Text>
                         </View>
 
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Déductions:</Text>
                             <Text style={[styles.detailValue, { color: Colors.error }]}>
-                                -{formatCurrency(selectedPayroll.deductions || 0)}
+                                -{formatCurrency(getDeductionsTotal(selectedPayroll))}
                             </Text>
                         </View>
 

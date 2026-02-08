@@ -1,8 +1,3 @@
-// API Configuration
-export const API_BASE_URL = __DEV__
-    ? 'http://192.168.1.4:5000/api' // Development
-    : 'https://api.olympia-hr.com/api'; // Production (update when deployed)
-
 // Leave Types
 export const LEAVE_TYPES = [
     { value: 'annual', label: 'Congé annuel', icon: 'beach-access' },

@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { Colors } from './styles/theme';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -18,9 +19,13 @@ import PayrollScreen from './screens/PayrollScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import CheckInCameraScreen from './screens/CheckInCameraScreen';
 import CheckOutScreen from './screens/CheckOutScreen';
+import KioskHomeScreen from './screens/KioskHomeScreen';
+import KioskVerifyScreen from './screens/KioskVerifyScreen';
+import KioskLeaveScreen from './screens/KioskLeaveScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
+const KioskStack = createStackNavigator();
 
 // Main Tabs Navigator
 const MainTabs = () => {
@@ -138,8 +143,45 @@ const AppNavigator = () => {
     );
 };
 
+const KioskNavigator = () => {
+    return (
+        <NavigationContainer>
+            <KioskStack.Navigator
+                screenOptions={{
+                    headerStyle: { backgroundColor: Colors.primary },
+                    headerTintColor: Colors.surface,
+                    headerTitleStyle: { fontWeight: 'bold' },
+                }}
+            >
+                <KioskStack.Screen
+                    name="KioskHome"
+                    component={KioskHomeScreen}
+                    options={{ title: 'KIOSK' }}
+                />
+                <KioskStack.Screen
+                    name="KioskVerify"
+                    component={KioskVerifyScreen}
+                    options={{ title: 'Verification' }}
+                />
+                <KioskStack.Screen
+                    name="KioskLeave"
+                    component={KioskLeaveScreen}
+                    options={{ title: 'Demande de conge' }}
+                />
+            </KioskStack.Navigator>
+        </NavigationContainer>
+    );
+};
+
 // Main App Component
 const App = () => {
+    const kioskFlag = Constants.expoConfig?.extra?.KIOSK_MODE;
+    const isKioskMode = kioskFlag === true || kioskFlag === 'true';
+
+    if (isKioskMode) {
+        return <KioskNavigator />;
+    }
+
     return (
         <AuthProvider>
             <AppNavigator />

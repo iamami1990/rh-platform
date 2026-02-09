@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const faceapi = require('@vladmandic/face-api');
+const faceapi = require('@vladmandic/face-api/dist/face-api.node-wasm.js');
 const { Canvas, Image, ImageData, loadImage } = require('@napi-rs/canvas');
 require('@tensorflow/tfjs');
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData });

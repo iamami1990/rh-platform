@@ -20,7 +20,15 @@ const upload = multer({
  */
 router.post('/', authenticate, upload.single('justification'), auditLogger('Submit Leave Request'), async (req, res) => {
     try {
-        const { employee_id, leave_type, start_date, end_date, reason } = req.body;
+        const { leave_type, start_date, end_date, reason } = req.body;
+        const employee_id = req.body.employee_id || req.user.employee_id;
+
+        if (!employee_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Employee ID is required. Please ensure your profile is complete.'
+            });
+        }
 
         // Handle file upload if present
         let document_url = req.body.document_url || null;
@@ -58,6 +66,7 @@ router.post('/', authenticate, upload.single('justification'), auditLogger('Subm
             }
         });
     } catch (error) {
+        console.error(`[${new Date().toISOString()}] CREATE LEAVE ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to create leave request',
@@ -159,6 +168,7 @@ router.put('/:id/approve', authenticate, authorize('admin', 'manager'), async (r
             message: 'Leave request approved'
         });
     } catch (error) {
+        console.error(`[${new Date().toISOString()}] APPROVE LEAVE ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to approve leave',
@@ -193,6 +203,7 @@ router.put('/:id/reject', authenticate, authorize('admin', 'manager'), async (re
             message: 'Leave request rejected'
         });
     } catch (error) {
+        console.error(`[${new Date().toISOString()}] REJECT LEAVE ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to reject leave',
@@ -248,6 +259,7 @@ router.get('/balance/:employee_id', authenticate, async (req, res) => {
             balance
         });
     } catch (error) {
+        console.error(`[${new Date().toISOString()}] FETCH LEAVE BALANCE ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch leave balance',

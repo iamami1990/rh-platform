@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.1.4:5000/api'; // Development axios instance
+const API_BASE_URL = 'http://192.168.239.214:5000/api/'; // Development axios instance
 // Create axios instance
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -46,7 +46,7 @@ api.interceptors.response.use(
 // Authentication API
 export const authAPI = {
     login: async (email, password) => {
-        const response = await api.post('/auth/login', { email, password });
+        const response = await api.post('auth/login', { email, password });
         const { token, user } = response.data;
 
         // Store credentials
@@ -57,48 +57,48 @@ export const authAPI = {
     },
 
     logout: async () => {
-        await api.post('/auth/logout');
+        await api.post('auth/logout');
         await AsyncStorage.removeItem('token');
         await AsyncStorage.removeItem('user');
     },
 
-    getMe: () => api.get('/auth/me'),
+    getMe: () => api.get('auth/me'),
 };
 
 // Attendance API
 export const attendanceAPI = {
-    checkIn: (data) => api.post('/attendance/check-in', data),
-    checkOut: (data) => api.post('/attendance/check-out', data),
-    getHistory: (employeeId) => api.get(`/attendance/employee/${employeeId}`),
+    checkIn: (data) => api.post('attendance/check-in', data),
+    checkOut: (data) => api.post('attendance/check-out', data),
+    getHistory: (employeeId) => api.get(`attendance/employee/${employeeId}`),
 };
 
 // Leaves API
 export const leavesAPI = {
-    getBalance: (employeeId) => api.get(`/leaves/balance/${employeeId}`),
-    request: (data) => api.post('/leaves', data),
+    getBalance: (employeeId) => api.get(`leaves/balance/${employeeId}`),
+    request: (data) => api.post('leaves', data),
     getMyLeaves: async () => {
         // Get current user to extract employee_id
         const userStr = await AsyncStorage.getItem('user');
         const user = JSON.parse(userStr);
         // Fetch leaves filtered by employee_id
-        return api.get(`/leaves?employee_id=${user.employee_id}`);
+        return api.get(`leaves?employee_id=${user.employee_id}`);
     },
 };
 
 // Payroll API
 export const payrollAPI = {
-    getMyPayrolls: () => api.get('/payroll/my'),
-    getPayroll: (id) => api.get(`/payroll/${id}`),
+    getMyPayrolls: () => api.get('payroll/my'),
+    getPayroll: (id) => api.get(`payroll/${id}`),
 };
 
 // Sentiment API
 export const sentimentAPI = {
-    getMySentiment: () => api.get('/sentiment/my'),
+    getMySentiment: () => api.get('sentiment/my'),
 };
 
 // Dashboard API
 export const dashboardAPI = {
-    getEmployee: () => api.get('/dashboard/employee'),
+    getEmployee: () => api.get('dashboard/employee'),
 };
 
 export default api;

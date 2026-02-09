@@ -13,7 +13,17 @@ const { authenticate, authorize } = require('../middleware/auth');
  */
 router.post('/check-in', authenticate, async (req, res) => {
     try {
-        const { employee_id, face_image_url, location, device_info } = req.body;
+        const { face_image_url, location, device_info } = req.body;
+        const employee_id = req.body.employee_id || req.user.employee_id;
+
+        if (!employee_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Employee ID is required. Please ensure your profile is complete.'
+            });
+        }
+
+        console.log(`[${new Date().toISOString()}] Check-in attempt for employee: ${employee_id}`);
 
         const today = moment().format('YYYY-MM-DD');
         const now = new Date();

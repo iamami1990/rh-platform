@@ -1,7 +1,11 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-const API_BASE_URL = 'http://192.168.239.214:5000/api/'; // Development axios instance
+const API_BASE_URL =
+    Constants.expoConfig?.extra?.API_BASE_URL ||
+    process.env.EXPO_PUBLIC_API_URL ||
+    'http://192.168.239.214:5000/api/';
 // Create axios instance
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -99,6 +103,15 @@ export const sentimentAPI = {
 // Dashboard API
 export const dashboardAPI = {
     getEmployee: () => api.get('dashboard/employee'),
+};
+
+// Kiosk API
+export const kioskAPI = {
+    verify: (data) => api.post('kiosk/verify', data),
+    checkIn: (data) => api.post('kiosk/check-in', data),
+    checkOut: (data) => api.post('kiosk/check-out', data),
+    leave: (data) => api.post('kiosk/leave', data),
+    payrollSlip: (data) => api.post('kiosk/payroll-slip', data),
 };
 
 export default api;

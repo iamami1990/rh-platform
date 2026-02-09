@@ -1,7 +1,9 @@
 const mongoose = require('mongoose');
 
 const faceEmbeddingSchema = new mongoose.Schema({
-    employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true, unique: true },
+    employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true, unique: true },
+    // Legacy compatibility
+    employee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     embeddings: {
         type: [Number],
         required: true
@@ -10,6 +12,16 @@ const faceEmbeddingSchema = new mongoose.Schema({
     images_count: { type: Number, default: 0 }
 }, {
     timestamps: true
+});
+
+faceEmbeddingSchema.pre('validate', function (next) {
+    if (this.employee && !this.employee_id) {
+        this.employee_id = this.employee;
+    }
+    if (this.employee_id && !this.employee) {
+        this.employee = this.employee_id;
+    }
+    next();
 });
 
 module.exports = mongoose.model('FaceEmbedding', faceEmbeddingSchema);

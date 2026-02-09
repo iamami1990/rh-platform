@@ -8,11 +8,6 @@ const userSchema = new mongoose.Schema({
         trim: true,
         lowercase: true
     },
-    user_id: {
-        type: String,
-        unique: true,
-        sparse: true
-    },
     password: {
         type: String,
         required: true
@@ -21,6 +16,21 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ['admin', 'manager', 'rh', 'employee'], // Added 'rh' based on user prompt
         default: 'employee'
+    },
+    employee: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee',
+        default: null
+    },
+    kiosk_pin_hash: {
+        type: String,
+        default: null
+    },
+    // Legacy compatibility
+    user_id: {
+        type: String,
+        unique: true,
+        sparse: true
     },
     employee_id: {
         type: mongoose.Schema.Types.ObjectId,
@@ -45,6 +55,16 @@ const userSchema = new mongoose.Schema({
     }
 }, {
     timestamps: true
+});
+
+userSchema.pre('save', function (next) {
+    if (this.employee && !this.employee_id) {
+        this.employee_id = this.employee;
+    }
+    if (this.employee_id && !this.employee) {
+        this.employee = this.employee_id;
+    }
+    next();
 });
 
 module.exports = mongoose.model('User', userSchema);

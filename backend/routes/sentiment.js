@@ -5,7 +5,8 @@ const Sentiment = require('../models/Sentiment');
 const Attendance = require('../models/Attendance');
 const Leave = require('../models/Leave');
 const Employee = require('../models/Employee');
-const Notification = require('../models/Notification.js'); // Assuming this exists or I should create it/mock it. Step 18 showed Notification.js? No, I checked earlier.
+const Notification = require('../models/Notification');
+const User = require('../models/User');
 const { authenticate, authorize } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
 const { generateSentimentPDF } = require('../utils/pdfGenerator');
@@ -19,7 +20,7 @@ const calculateSentiment = async (employee_id, month) => {
 
     // Get attendance records
     const attendanceRecords = await Attendance.find({
-        employee_id,
+        employee: employee_id,
         date: { $gte: startDate, $lte: endDate }
     });
 
@@ -27,7 +28,7 @@ const calculateSentiment = async (employee_id, month) => {
     // Ideally we check for any overlap, but here we can just check if start_date is in the month
     // or improved logic:
     const leaveRecords = await Leave.find({
-        employee_id,
+        employee: employee_id,
         status: 'approved',
         $or: [
             { start_date: { $gte: startDate, $lte: endDate } },
@@ -82,7 +83,7 @@ const calculateSentiment = async (employee_id, month) => {
 
     // Trend Calculation
     const previousMonth = moment(month, 'YYYY-MM').subtract(1, 'month').format('YYYY-MM');
-    const pastSentiment = await Sentiment.findOne({ employee_id, month: previousMonth });
+    const pastSentiment = await Sentiment.findOne({ employee: employee_id, month: previousMonth });
 
     let trend = 'stable';
     if (pastSentiment) {
@@ -137,7 +138,7 @@ router.post('/generate', authenticate, authorize('admin'), async (req, res) => {
             const employee_id = employee._id;
 
             // Check if sentiment already exists
-            const existingSentiment = await Sentiment.findOne({ employee_id, month });
+            const existingSentiment = await Sentiment.findOne({ employee: employee_id, month });
 
             if (existingSentiment) {
                 results.push({
@@ -151,6 +152,7 @@ router.post('/generate', authenticate, authorize('admin'), async (req, res) => {
             const sentimentData = await calculateSentiment(employee_id, month);
 
             const newSentiment = new Sentiment({
+                employee: employee_id,
                 employee_id,
                 month,
                 ...sentimentData,
@@ -160,23 +162,23 @@ router.post('/generate', authenticate, authorize('admin'), async (req, res) => {
 
             await newSentiment.save();
 
-            // Trigger Alert if high risk
-            // Check if Notification model exists or we just skip this part / assume it works if we have the model
-            // I'll assume Notification model is available or I should have checked.
-            // If Notification model is missing, this will crash. I should be careful.
-            // I will assume it exists for now based on previous context.
             if (newSentiment.risk_level === 'high') {
                 try {
-                    const Notification = require('../models/Notification'); // Lazy load
-                    await new Notification({
-                        type: 'AI_RISK_ALERT',
-                        employee_id,
+                    const adminUsers = await User.find({ role: { $in: ['admin', 'rh'] } }).select('_id');
+                    const notificationPayloads = adminUsers.map(u => ({
+                        user: u._id,
                         title: 'Alerte de risque élevé (IA)',
-                        message: `L'employé a un score de sentiment de ${newSentiment.overall_score.toFixed(0)}/100. Une intervention est suggérée.`,
-                        sentiment_id: newSentiment._id,
-                        created_at: new Date(),
-                        read: false
-                    }).save();
+                        body: `L'employé a un score de sentiment de ${newSentiment.overall_score.toFixed(0)}/100. Une intervention est suggérée.`,
+                        type: 'warning',
+                        data: {
+                            sentiment_id: newSentiment._id,
+                            employee_id
+                        }
+                    }));
+
+                    if (notificationPayloads.length > 0) {
+                        await Notification.insertMany(notificationPayloads);
+                    }
                 } catch (e) {
                     console.warn('Could not create notification', e.message);
                 }
@@ -217,7 +219,7 @@ router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) =>
 
         const query = {};
         if (month) query.month = month;
-        if (employee_id) query.employee_id = employee_id;
+        if (employee_id) query.employee = employee_id;
 
         const sentiments = await Sentiment.find(query).sort({ created_at: -1 });
 
@@ -278,7 +280,7 @@ router.get('/my', authenticate, async (req, res) => {
     try {
         const employeeId = req.user.employee_id || req.user.user_id;
 
-        const history = await Sentiment.find({ employee_id: employeeId }).sort({ month: -1 });
+        const history = await Sentiment.find({ employee: employeeId }).sort({ month: -1 });
 
         res.json({
             success: true,
@@ -303,7 +305,7 @@ router.get('/my', authenticate, async (req, res) => {
  */
 router.get('/:employee_id', authenticate, async (req, res) => {
     try {
-        const history = await Sentiment.find({ employee_id: req.params.employee_id }).sort({ created_at: -1 });
+        const history = await Sentiment.find({ employee: req.params.employee_id }).sort({ created_at: -1 });
 
         const limitedHistory = history.slice(0, 12); // Last 12 months
 
@@ -333,7 +335,7 @@ router.get('/report/export/:employee_id', authenticate, authorize('admin', 'mana
         const employee = await Employee.findById(employee_id);
         if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
-        const history = await Sentiment.find({ employee_id }).sort({ month: 1 });
+        const history = await Sentiment.find({ employee: employee_id }).sort({ month: 1 });
 
         if (history.length === 0) return res.status(404).json({ success: false, message: 'No analysis history found' });
 

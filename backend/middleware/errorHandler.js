@@ -7,7 +7,12 @@ const path = require('path');
 const errorHandler = (err, req, res, next) => {
     const errorLog = `[${new Date().toISOString()}] ${err.name}: ${err.message}\nStack: ${err.stack}\nURL: ${req.originalUrl}\nMethod: ${req.method}\n\n`;
     try {
-        fs.appendFileSync('c:\\Users\\ismai\\Desktop\\RH\\backend\\error.log', errorLog);
+        const logsDir = path.join(__dirname, '..', 'logs');
+        if (!fs.existsSync(logsDir)) {
+            fs.mkdirSync(logsDir, { recursive: true });
+        }
+        const logPath = path.join(logsDir, 'error.log');
+        fs.appendFileSync(logPath, errorLog);
     } catch (e) {
         console.error('Failed to write to error.log:', e.message);
     }
@@ -43,11 +48,6 @@ const errorHandler = (err, req, res, next) => {
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
     });
 };
-
-/**
- * Map Firebase error codes to user-friendly messages
- */
-
 
 module.exports = {
     errorHandler

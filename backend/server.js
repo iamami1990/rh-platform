@@ -3,6 +3,9 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const cron = require('node-cron');
+const moment = require('moment');
+const path = require('path');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -17,6 +20,7 @@ const notificationsRoutes = require('./routes/notifications');
 const analyticsRoutes = require('./routes/analytics');
 const overtimeRoutes = require('./routes/overtime');
 const legalRoutes = require('./routes/legal');
+const kioskRoutes = require('./routes/kiosk');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
@@ -28,6 +32,7 @@ const YAML = require('yamljs');
 const swaggerDocument = YAML.load('./swagger.yaml');
 
 const connectDB = require('./config/db');
+const { markAbsencesForDate } = require('./utils/absenceService');
 
 // Initialize Express app
 const app = express();
@@ -35,6 +40,17 @@ const PORT = process.env.PORT || 5000;
 
 // Connect to MongoDB
 connectDB();
+
+// Daily absence job (runs at 23:50)
+cron.schedule('50 23 * * *', async () => {
+    try {
+        const today = moment().format('YYYY-MM-DD');
+        await markAbsencesForDate(today);
+        console.log(`[ABSENCE JOB] Processed absences for ${today}`);
+    } catch (error) {
+        console.error('[ABSENCE JOB] Error:', error.message);
+    }
+});
 
 // Security middleware
 app.use(helmet());
@@ -53,6 +69,9 @@ if (process.env.NODE_ENV === 'development') {
 // Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Static uploads
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -81,6 +100,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/overtime', overtimeRoutes);
 app.use('/api/legal', legalRoutes);
+app.use('/api/kiosk', kioskRoutes);
 
 // 404 handler
 app.use((req, res) => {

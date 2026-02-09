@@ -10,10 +10,8 @@ const auditLogSchema = new mongoose.Schema({
     status: Number,
     ip: String,
     user_agent: String,
-    timestamp: { type: Date, default: Date.now },
+    timestamp: { type: Date, default: Date.now, expires: 60 * 60 * 24 * 90 },
     details: mongoose.Schema.Types.Mixed
-}, {
-    expireAfterSeconds: 60 * 60 * 24 * 90 // Auto-delete logs after 90 days
 });
 
 module.exports = mongoose.model('AuditLog', auditLogSchema);

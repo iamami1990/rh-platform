@@ -1,5 +1,11 @@
+process.env.MONGO_URI = 'mongodb://127.0.0.1:27017/rh_platform_test';
+process.env.JWT_SECRET = 'test-secret';
+
 const request = require('supertest');
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const app = require('../server');
+const User = require('../models/User');
 
 describe('Authentication Tests', () => {
     let authToken;
@@ -9,6 +15,12 @@ describe('Authentication Tests', () => {
         password: 'TestPassword123!',
         role: 'admin'
     };
+
+    beforeAll(async () => {
+        await mongoose.connection.dropDatabase();
+        const hashed = await bcrypt.hash(testUser.password, 10);
+        await User.create({ email: testUser.email, password: hashed, role: testUser.role });
+    });
 
     describe('POST /api/auth/login', () => {
         it('should login with valid credentials', async () => {

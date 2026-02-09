@@ -226,7 +226,7 @@ const generatePayrollPDF = async (payrollData, employeeData) => {
     try {
         const qrData = JSON.stringify({
             id: payrollData.payroll_id,
-            emp: employeeData.employee_id,
+            emp: employeeData._id,
             month: payrollData.month,
             net: payrollData.net_salary
         });

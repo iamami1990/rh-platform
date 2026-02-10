@@ -42,7 +42,7 @@ const attendanceSchema = new mongoose.Schema({
     timestamps: true
 });
 
-attendanceSchema.pre('validate', function (next) {
+attendanceSchema.pre('validate', async function () {
     if (this.employee && !this.employee_id) {
         this.employee_id = this.employee;
     }
@@ -50,9 +50,8 @@ attendanceSchema.pre('validate', function (next) {
         this.employee = this.employee_id;
     }
     if ((this.status === 'present' || this.status === 'late') && !this.check_in_time) {
-        return next(new Error('check_in_time is required for present/late status'));
+        throw new Error('check_in_time is required for present/late status');
     }
-    next();
 });
 
 // Index for quick lookup by employee and date

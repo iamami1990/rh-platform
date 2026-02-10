@@ -5,6 +5,7 @@ const User = require('../models/User');
  * Authenticate user using JWT token
  */
 const authenticate = async (req, res, next) => {
+    console.log('DEBUG: authenticate executing, next type:', typeof next);
     try {
         // Get token from header
         const authHeader = req.headers.authorization;

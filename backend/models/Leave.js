@@ -33,14 +33,13 @@ const leaveSchema = new mongoose.Schema({
     timestamps: true
 });
 
-leaveSchema.pre('validate', function (next) {
+leaveSchema.pre('validate', async function () {
     if (this.employee && !this.employee_id) {
         this.employee_id = this.employee;
     }
     if (this.employee_id && !this.employee) {
         this.employee = this.employee_id;
     }
-    next();
 });
 
 module.exports = mongoose.model('Leave', leaveSchema);

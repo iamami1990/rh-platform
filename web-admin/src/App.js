@@ -8,8 +8,10 @@ import EmployeesPage from './pages/EmployeesPage';
 import AttendancePage from './pages/AttendancePage';
 import LeavesPage from './pages/LeavesPage';
 import PayrollPage from './pages/PayrollPage';
+import OvertimePage from './pages/OvertimePage';
 import SentimentPage from './pages/SentimentPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import LegalReportsPage from './pages/LegalReportsPage';
 import MainLayout from './components/MainLayout';
 
 // Protected Route Component
@@ -44,8 +46,10 @@ function App() {
                 <Route path="attendance" element={<AttendancePage />} />
                 <Route path="leaves" element={<LeavesPage />} />
                 <Route path="payroll" element={<PayrollPage />} />
+                <Route path="overtime" element={<OvertimePage />} />
                 <Route path="sentiment" element={<SentimentPage />} />
                 <Route path="analytics" element={<AnalyticsPage />} />
+                <Route path="legal" element={<LegalReportsPage />} />
             </Route>
         </Routes>
     );

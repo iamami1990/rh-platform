@@ -73,28 +73,28 @@ describe('Payroll Calculation Tests - Tunisian Tax Law', () => {
 
     describe('Seniority Bonus', () => {
         it('should give 0% for less than 2 years', () => {
-            const hireDate = '2024-01-01';
+            const hireDate = '2025-01-01'; // 1 year ago relative to 2026
             const baseSalary = 1500;
             const bonus = calculateSeniorityBonus(hireDate, baseSalary);
             expect(bonus).toBe(0);
         });
 
         it('should give 3% for 2-5 years', () => {
-            const hireDate = '2022-01-01';
+            const hireDate = '2023-01-01'; // 3 years ago
             const baseSalary = 1500;
             const bonus = calculateSeniorityBonus(hireDate, baseSalary);
             expect(bonus).toBeCloseTo(45, 2);
         });
 
         it('should give 5% for 5-10 years', () => {
-            const hireDate = '2018-01-01';
+            const hireDate = '2020-01-01'; // 6 years ago
             const baseSalary = 1500;
             const bonus = calculateSeniorityBonus(hireDate, baseSalary);
             expect(bonus).toBeCloseTo(75, 2);
         });
 
         it('should give 20% for 20+ years', () => {
-            const hireDate = '2000-01-01';
+            const hireDate = '2000-01-01'; // 26 years ago
             const baseSalary = 1500;
             const bonus = calculateSeniorityBonus(hireDate, baseSalary);
             expect(bonus).toBeCloseTo(300, 2);

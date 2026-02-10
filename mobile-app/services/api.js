@@ -6,6 +6,7 @@ const API_BASE_URL =
     Constants.expoConfig?.extra?.API_BASE_URL ||
     process.env.EXPO_PUBLIC_API_URL ||
     'http://localhost:5000/api';
+
 // Create axios instance
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -14,6 +15,21 @@ const api = axios.create({
     },
     timeout: 10000,
 });
+
+// Token refresh state
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
 
 // Request interceptor - add auth token
 api.interceptors.request.use(
@@ -24,7 +40,7 @@ api.interceptors.request.use(
                 config.headers.Authorization = `Bearer ${token}`;
             }
         } catch (error) {
-            console.error('Error getting token:', error);
+            // Silently fail - request will proceed without auth
         }
         return config;
     },
@@ -33,15 +49,58 @@ api.interceptors.request.use(
     }
 );
 
-// Response interceptor - handle errors
+// Response interceptor - handle 401 with token refresh
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
-        if (error.response?.status === 401) {
-            // Token expired - logout
-            await AsyncStorage.removeItem('token');
-            await AsyncStorage.removeItem('user');
-            // Navigate to login (implement navigation logic)
+        const originalRequest = error.config;
+
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            // Don't retry auth endpoints
+            if (originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/refresh-token')) {
+                await AsyncStorage.multiRemove(['token', 'refreshToken', 'user']);
+                return Promise.reject(error);
+            }
+
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then(token => {
+                    originalRequest.headers['Authorization'] = 'Bearer ' + token;
+                    return api(originalRequest);
+                }).catch(err => Promise.reject(err));
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            try {
+                const refreshToken = await AsyncStorage.getItem('refreshToken');
+                if (!refreshToken) {
+                    await AsyncStorage.multiRemove(['token', 'refreshToken', 'user']);
+                    return Promise.reject(error);
+                }
+
+                const response = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
+                    refreshToken: refreshToken
+                });
+
+                const { token: newToken, refreshToken: newRefreshToken } = response.data;
+                await AsyncStorage.setItem('token', newToken);
+                if (newRefreshToken) {
+                    await AsyncStorage.setItem('refreshToken', newRefreshToken);
+                }
+
+                originalRequest.headers['Authorization'] = 'Bearer ' + newToken;
+                processQueue(null, newToken);
+                return api(originalRequest);
+            } catch (refreshError) {
+                processQueue(refreshError, null);
+                await AsyncStorage.multiRemove(['token', 'refreshToken', 'user']);
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
+            }
         }
         return Promise.reject(error);
     }
@@ -51,19 +110,20 @@ api.interceptors.response.use(
 export const authAPI = {
     login: async (email, password) => {
         const response = await api.post('/auth/login', { email, password });
-        const { token, user } = response.data;
+        const { token, refreshToken, user } = response.data;
 
         // Store credentials
         await AsyncStorage.setItem('token', token);
+        if (refreshToken) await AsyncStorage.setItem('refreshToken', refreshToken);
         await AsyncStorage.setItem('user', JSON.stringify(user));
 
-        return { token, user };
+        return { token, refreshToken, user };
     },
 
     logout: async () => {
-        await api.post('/auth/logout');
-        await AsyncStorage.removeItem('token');
-        await AsyncStorage.removeItem('user');
+        const refreshToken = await AsyncStorage.getItem('refreshToken');
+        await api.post('/auth/logout', { refreshToken }).catch(() => { });
+        await AsyncStorage.multiRemove(['token', 'refreshToken', 'user']);
     },
 
     getMe: () => api.get('/auth/me'),
@@ -81,10 +141,8 @@ export const leavesAPI = {
     getBalance: (employeeId) => api.get(`/leaves/balance/${employeeId}`),
     request: (data) => api.post('/leaves', data),
     getMyLeaves: async () => {
-        // Get current user to extract employee_id
         const userStr = await AsyncStorage.getItem('user');
         const user = JSON.parse(userStr);
-        // Fetch leaves filtered by employee_id
         return api.get(`/leaves?employee_id=${user.employee_id}`);
     },
 };
@@ -95,6 +153,13 @@ export const payrollAPI = {
     getPayroll: (id) => api.get(`/payroll/${id}`),
 };
 
+// Overtime API
+export const overtimeAPI = {
+    getMy: () => api.get('/overtime/my'),
+    create: (data) => api.post('/overtime', data),
+    cancel: (id) => api.delete(`/overtime/${id}`),
+};
+
 // Sentiment API
 export const sentimentAPI = {
     getMySentiment: () => api.get('/sentiment/my'),
@@ -103,6 +168,13 @@ export const sentimentAPI = {
 // Dashboard API
 export const dashboardAPI = {
     getEmployee: () => api.get('/dashboard/employee'),
+};
+
+// Notifications API
+export const notificationAPI = {
+    getAll: () => api.get('/notifications'),
+    markRead: (id) => api.put(`/notifications/${id}/read`),
+    markAllRead: () => api.put('/notifications/read-all'),
 };
 
 // Kiosk API

@@ -53,11 +53,7 @@ router.post('/enroll', authenticate, authorize('admin'), async (req, res) => {
             employee_id
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Face enrollment failed',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Face enrollment failed' });
     }
 });
 
@@ -104,11 +100,7 @@ router.post('/verify', authenticate, async (req, res) => {
             });
         }
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Face verification failed',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Face verification failed' });
     }
 });
 
@@ -134,11 +126,7 @@ router.post('/liveness-check', authenticate, async (req, res) => {
             liveness: result
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Liveness check failed',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Liveness check failed' });
     }
 });
 
@@ -158,11 +146,7 @@ router.delete('/unenroll/:employee_id', authenticate, authorize('admin'), async 
             employee_id
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to remove face data',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Failed to remove face data' });
     }
 });
 

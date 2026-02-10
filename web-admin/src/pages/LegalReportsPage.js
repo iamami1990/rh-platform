@@ -24,6 +24,7 @@ import {
     AccountBalance as BankIcon,
     LocalAtm as MoneyIcon
 } from '@mui/icons-material';
+import { Assessment as AssessmentIcon } from '@mui/icons-material';
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -364,7 +365,6 @@ const LegalReportsPage = () => {
     );
 };
 
-// Missing import
-import { Assessment as AssessmentIcon } from '@mui/icons-material';
+
 
 export default LegalReportsPage;

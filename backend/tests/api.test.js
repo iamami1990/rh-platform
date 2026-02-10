@@ -6,6 +6,8 @@ const User = require('../models/User');
 
 describe('Authentication API', () => {
     beforeAll(async () => {
+        const connectDB = require('../config/db');
+        await connectDB();
         await mongoose.connection.dropDatabase();
         const hashed = await bcrypt.hash('Admin123!', 10);
         await User.create({ email: 'admin@olympia.com', password: hashed, role: 'admin' });
@@ -158,5 +160,9 @@ describe('Sentiment Analysis Scoring', () => {
         expect(getRiskLevel(75)).toBe('low');
         expect(getRiskLevel(55)).toBe('medium');
         expect(getRiskLevel(45)).toBe('high');
+    });
+
+    afterAll(async () => {
+        await mongoose.connection.close();
     });
 });

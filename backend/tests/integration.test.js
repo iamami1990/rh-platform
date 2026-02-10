@@ -6,11 +6,29 @@ describe('Integration Tests - Complete API Flows', () => {
     let testEmployeeId;
 
     beforeAll(async () => {
+        // Ensure DB is connected
+        const connectDB = require('../config/db');
+        await connectDB();
+
+        // Seed database
+        const mongoose = require('mongoose');
+        const User = require('../models/User');
+        const bcrypt = require('bcryptjs');
+
+        await mongoose.connection.dropDatabase();
+
+        const hashedPassword = await bcrypt.hash('Admin123!', 10);
+        await User.create({
+            email: 'admin-integration@olympia.com',
+            password: hashedPassword,
+            role: 'admin'
+        });
+
         // Login to get auth token
         const loginResponse = await request(app)
             .post('/api/auth/login')
             .send({
-                email: 'admin@olympia.com',
+                email: 'admin-integration@olympia.com',
                 password: 'Admin123!'
             });
 
@@ -232,5 +250,9 @@ describe('Integration Tests - Complete API Flows', () => {
 
             expect(response.status).toBe(404);
         });
+    });
+
+    afterAll(async () => {
+        await mongoose.connection.close();
     });
 });

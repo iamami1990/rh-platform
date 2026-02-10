@@ -86,14 +86,13 @@ const payrollSchema = new mongoose.Schema({
 });
 
 // Index for uniqueness per employee per month
-payrollSchema.pre('validate', function (next) {
+payrollSchema.pre('validate', function () {
     if (this.employee && !this.employee_id) {
         this.employee_id = this.employee;
     }
     if (this.employee_id && !this.employee) {
         this.employee = this.employee_id;
     }
-    next();
 });
 
 payrollSchema.index({ employee: 1, month: 1 }, { unique: true });

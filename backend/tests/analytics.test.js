@@ -12,6 +12,8 @@ describe('Analytics API Tests', () => {
     let adminToken;
 
     beforeAll(async () => {
+        const connectDB = require('../config/db');
+        await connectDB();
         await mongoose.connection.dropDatabase();
 
         const adminPass = await bcrypt.hash('Admin123!', 10);
@@ -68,5 +70,9 @@ describe('Analytics API Tests', () => {
             expect(res.statusCode).toBe(200);
             expect(Array.isArray(res.body.predictions)).toBe(true);
         });
+    });
+
+    afterAll(async () => {
+        await mongoose.connection.close();
     });
 });

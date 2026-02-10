@@ -14,6 +14,8 @@ describe('Sentiment Analysis Tests', () => {
     let employeeId;
 
     beforeAll(async () => {
+        const connectDB = require('../config/db');
+        await connectDB();
         await mongoose.connection.dropDatabase();
 
         const adminPass = await bcrypt.hash('Admin123!', 10);
@@ -70,5 +72,9 @@ describe('Sentiment Analysis Tests', () => {
             expect(res.statusCode).toBe(200);
             expect(res.body.sentiments).toHaveLength(1);
         });
+    });
+
+    afterAll(async () => {
+        await mongoose.connection.close();
     });
 });

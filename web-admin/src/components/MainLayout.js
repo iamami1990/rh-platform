@@ -99,7 +99,7 @@ const MainLayout = () => {
                 }}
             >
                 <Typography variant="h5" fontWeight="800" sx={{ letterSpacing: '-0.5px' }}>
-                    OLYMPIA HR
+                    ScanStaff
                 </Typography>
                 <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 500 }}>
                     MANAGEMENT INTELLIGENT

@@ -1,8 +1,14 @@
 const path = require('path');
 const fs = require('fs');
-const faceapi = require('@vladmandic/face-api');
 const { Canvas, Image, ImageData, loadImage } = require('@napi-rs/canvas');
-require('@tensorflow/tfjs');
+const { TextEncoder, TextDecoder } = require('util');
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
+
+const tf = require('@tensorflow/tfjs');
+require('@tensorflow/tfjs-backend-wasm');
+tf.setBackend && tf.setBackend('wasm');
+const faceapi = require('@vladmandic/face-api/dist/face-api.node-wasm.js');
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
 
 const MODEL_PATH = path.join(__dirname, '..', 'models', 'face');

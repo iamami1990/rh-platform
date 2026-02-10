@@ -114,7 +114,7 @@ const LoginPage = () => {
                     {/* Header */}
                     <Box sx={{ textAlign: 'center', mb: 5 }}>
                         <Typography variant="h4" fontWeight="900" sx={{ backgroundImage: 'linear-gradient(45deg, #4f46e5, #ec4899)', backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent', mb: 1 }}>
-                            OLYMPIA HR
+                            ScanStaff
                         </Typography>
                         <Typography variant="body2" color="text.secondary" fontWeight="500">
                             Accédez à votre espace sécurisé

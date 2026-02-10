@@ -29,3 +29,4 @@ export const CACHE_KEYS = {
     USER: 'user',
     LAST_SYNC: 'last_sync',
 };
+export const PLATFORM_NAME = "ScanStaff";

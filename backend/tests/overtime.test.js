@@ -1,7 +1,38 @@
+process.env.MONGO_URI = 'mongodb://127.0.0.1:27017/rh_platform_test';
+process.env.JWT_SECRET = 'test-secret';
+
+const request = require('supertest');
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const app = require('../server');
+const User = require('../models/User');
+const Employee = require('../models/Employee');
+
 describe('Overtime Management Tests', () => {
     let authToken;
-    let employeeId = 'test-employee-123';
+    let employeeId;
     let overtimeId;
+
+    beforeAll(async () => {
+        await mongoose.connection.dropDatabase();
+        const hashed = await bcrypt.hash('Admin123!', 10);
+        await User.create({ email: 'admin-ot@test.tn', password: hashed, role: 'admin' });
+
+        const emp = await Employee.create({
+            firstName: 'John',
+            lastName: 'Doe',
+            email: 'john.doe@test.tn',
+            department: 'IT',
+            position: 'Developer',
+            contract_type: 'CDI',
+            hireDate: new Date(),
+            salary_brut: 2000
+        });
+        employeeId = emp._id.toString();
+
+        const loginRes = await request(app).post('/api/auth/login').send({ email: 'admin-ot@test.tn', password: 'Admin123!' });
+        authToken = loginRes.body.token;
+    });
 
     describe('POST /api/overtime', () => {
         it('should create overtime request successfully', async () => {

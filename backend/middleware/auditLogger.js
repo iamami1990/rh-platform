@@ -6,6 +6,7 @@ const AuditLog = require('../models/AuditLog');
  */
 const auditLogger = (action) => {
     return async (req, res, next) => {
+        console.log('DEBUG: auditLogger executing for', action, 'next type:', typeof next);
         const originalSend = res.send;
 
         res.send = function (data) {

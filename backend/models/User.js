@@ -57,14 +57,13 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 });
 
-userSchema.pre('save', function (next) {
+userSchema.pre('save', async function () {
     if (this.employee && !this.employee_id) {
         this.employee_id = this.employee;
     }
     if (this.employee_id && !this.employee) {
         this.employee = this.employee_id;
     }
-    next();
 });
 
 module.exports = mongoose.model('User', userSchema);

@@ -43,7 +43,7 @@
       "expo-font"
     ],
     "extra": {
-      "API_BASE_URL": "http://localhost:5000/api",
+      "API_BASE_URL": "http://10.0.2.2:5000/api",
       "KIOSK_MODE": false,
       "eas": {
         "projectId": "dbc528d6-8020-4f98-8d48-84825eb43895"

@@ -86,6 +86,12 @@ app.get('/api/health', (req, res) => {
 // Swagger API Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+// Debug middleware
+app.use((req, res, next) => {
+    console.log('DEBUG: Global request:', req.method, req.originalUrl);
+    next();
+});
+
 // API Routes (with rate limiting)
 app.use('/api', apiLimiter);
 app.use('/api/auth', authRoutes);
@@ -115,10 +121,13 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Olympia HR API running on port ${PORT}`);
-    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
-});
+// Start server only if run directly
+if (require.main === module) {
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 Olympia HR API running on port ${PORT}`);
+        console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
+    });
+}
 
 module.exports = app;

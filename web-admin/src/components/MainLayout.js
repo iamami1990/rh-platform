@@ -30,6 +30,8 @@ import {
     AccountCircle,
     Analytics,
     Notifications,
+    AccessAlarm,
+    Gavel,
 } from '@mui/icons-material';
 import { logout } from '../store/authSlice';
 import { sentimentAPI } from '../services/api';
@@ -64,8 +66,10 @@ const MainLayout = () => {
         { text: 'Présence', icon: <AccessTime />, path: '/attendance' },
         { text: 'Congés', icon: <BeachAccess />, path: '/leaves' },
         { text: 'Paie', icon: <MonetizationOn />, path: '/payroll' },
+        { text: 'Heures Sup.', icon: <AccessAlarm />, path: '/overtime' },
         { text: 'Sentiment IA', icon: <Psychology />, path: '/sentiment' },
         { text: 'Statistiques', icon: <Analytics />, path: '/analytics' },
+        { text: 'Documents Légaux', icon: <Gavel />, path: '/legal' },
     ];
 
     const handleDrawerToggle = () => {

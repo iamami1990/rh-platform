@@ -1,5 +1,9 @@
 const path = require('path');
 const fs = require('fs');
+<<<<<<< HEAD
+=======
+const faceapi = require('@vladmandic/face-api/dist/face-api.node-wasm.js');
+>>>>>>> 5e103a5e1bd29e9c6a0d9a135ad47ac2af337787
 const { Canvas, Image, ImageData, loadImage } = require('@napi-rs/canvas');
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;

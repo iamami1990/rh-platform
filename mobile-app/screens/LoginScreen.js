@@ -50,7 +50,7 @@ const LoginScreen = () => {
                 >
                     <View style={styles.logoContainer}>
                         <Text style={styles.logo}>🏢</Text>
-                        <Text style={styles.title}>Olympia HR</Text>
+                        <Text style={styles.title}>ScanStaff</Text>
                         <Text style={styles.subtitle}>Plateforme Intelligente RH</Text>
                     </View>
 

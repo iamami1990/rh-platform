@@ -34,7 +34,7 @@ router.get('/', authenticate, async (req, res) => {
             }))
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Failed to fetch notifications', error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to fetch notifications' });
     }
 });
 
@@ -59,7 +59,7 @@ router.put('/:id/read', authenticate, async (req, res) => {
 
         res.json({ success: true, message: 'Notification marked as read' });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Failed to update notification', error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to update notification' });
     }
 });
 
@@ -77,7 +77,7 @@ router.put('/read-all', authenticate, async (req, res) => {
 
         res.json({ success: true, message: 'All notifications marked as read' });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Failed to update notifications', error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to update notifications' });
     }
 });
 
@@ -107,7 +107,7 @@ router.post('/send', authenticate, authorize('admin', 'manager', 'rh'), async (r
             notification_id: notification._id
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Failed to create notification', error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to create notification' });
     }
 });
 

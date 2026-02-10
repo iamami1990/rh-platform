@@ -90,7 +90,7 @@ router.post('/verify', async (req, res) => {
         return res.json({ success: true, employee_id: employeeId.toString(), method });
     } catch (error) {
         await logKiosk({ action: 'verify', success: false, reason: error.message, device_info });
-        return res.status(500).json({ success: false, message: 'Verification failed', error: error.message });
+        return res.status(500).json({ success: false, message: 'Verification failed' });
     }
 });
 
@@ -158,7 +158,7 @@ router.post('/check-in', async (req, res) => {
         });
     } catch (error) {
         await logKiosk({ action: 'check_in', success: false, reason: error.message, device_info });
-        res.status(500).json({ success: false, message: 'Check-in failed', error: error.message });
+        res.status(500).json({ success: false, message: 'Check-in failed' });
     }
 });
 
@@ -208,7 +208,7 @@ router.post('/check-out', async (req, res) => {
         res.json({ success: true, message: 'Check-out successful' });
     } catch (error) {
         await logKiosk({ action: 'check_out', success: false, reason: error.message, device_info });
-        res.status(500).json({ success: false, message: 'Check-out failed', error: error.message });
+        res.status(500).json({ success: false, message: 'Check-out failed' });
     }
 });
 
@@ -259,7 +259,7 @@ router.post('/leave', async (req, res) => {
         res.status(201).json({ success: true, message: 'Leave request submitted', leave_id: leave._id });
     } catch (error) {
         await logKiosk({ action: 'leave_request', success: false, reason: error.message, device_info });
-        res.status(500).json({ success: false, message: 'Leave request failed', error: error.message });
+        res.status(500).json({ success: false, message: 'Leave request failed' });
     }
 });
 
@@ -303,7 +303,7 @@ router.post('/payroll-slip', async (req, res) => {
         });
     } catch (error) {
         await logKiosk({ action: 'payroll_slip', success: false, reason: error.message, device_info });
-        res.status(500).json({ success: false, message: 'Payroll request failed', error: error.message });
+        res.status(500).json({ success: false, message: 'Payroll request failed' });
     }
 });
 

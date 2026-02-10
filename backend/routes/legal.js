@@ -95,8 +95,7 @@ router.get('/cnss/:month', authenticate, authorize('admin'), auditLogger('Genera
         await workbook.xlsx.write(res);
         res.end();
     } catch (error) {
-        console.error('CNSS REPORT ERROR:', error);
-        res.status(500).json({ success: false, message: 'Échec génération bordereau CNSS', error: error.message });
+        res.status(500).json({ success: false, message: 'Échec génération bordereau CNSS' });
     }
 });
 
@@ -183,8 +182,7 @@ router.get('/ir-annual/:year', authenticate, authorize('admin'), auditLogger('Ge
         await workbook.xlsx.write(res);
         res.end();
     } catch (error) {
-        console.error('IR ANNUAL REPORT ERROR:', error);
-        res.status(500).json({ success: false, message: 'Échec génération déclaration IR', error: error.message });
+        res.status(500).json({ success: false, message: 'Échec génération déclaration IR' });
     }
 });
 
@@ -273,8 +271,7 @@ router.get('/work-certificate/:employee_id', authenticate, authorize('admin', 'm
         doc.pipe(res);
         doc.end();
     } catch (error) {
-        console.error('WORK CERTIFICATE ERROR:', error);
-        res.status(500).json({ success: false, message: 'Échec génération attestation', error: error.message });
+        res.status(500).json({ success: false, message: 'Échec génération attestation' });
     }
 });
 
@@ -345,8 +342,7 @@ router.get('/salary-certificate/:employee_id', authenticate, authorize('admin'),
         doc.pipe(res);
         doc.end();
     } catch (error) {
-        console.error('SALARY CERTIFICATE ERROR:', error);
-        res.status(500).json({ success: false, message: 'Échec génération certificat', error: error.message });
+        res.status(500).json({ success: false, message: 'Échec génération certificat' });
     }
 });
 

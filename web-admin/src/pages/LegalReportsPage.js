@@ -22,7 +22,8 @@ import {
     Description as DocumentIcon,
     Assessment as ReportIcon,
     AccountBalance as BankIcon,
-    LocalAtm as MoneyIcon
+    LocalAtm as MoneyIcon,
+    Assessment as AssessmentIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -364,7 +365,6 @@ const LegalReportsPage = () => {
     );
 };
 
-// Missing import
-import { Assessment as AssessmentIcon } from '@mui/icons-material';
+
 
 export default LegalReportsPage;
